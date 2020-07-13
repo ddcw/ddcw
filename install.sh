@@ -20,6 +20,7 @@ function init() {
 	current_user=$(whoami)
 	if [[ ! "${current_user}" == "root" ]] ; then
 		echo -e "[\033[31;40mWARNNING\033[0m `date +%Y%m%d-%H:%M:%S`] \033[31;40m current user is ${current_user}, you must run install.sh as ROOT .\033[0m"
+		exit 1
 	fi
 	mkdir -p ${installdir} ${ddcwdir} ${rollbackdir} ${confdir} ${mandir} ${completion}
 }
@@ -27,9 +28,9 @@ function init() {
 function install_shells() {
 	for i in ./shells/*
 	do
-		shell_name=$(echo $i | awk -F .sh '{print $1}')
+		shell_name=$(echo $i | sed 's/.sh$//' | awk -F / '{print $NF}' )
 		[[ -f /usr/bin/${shell_name} ]] && mv /usr/bin/${shell_name} ${installdir} && echo -e "[\033[32;40mINFO\033[0m `date +%Y%m%d-%H:%M:%S`] \033[32;40m backup /usr/bin/${shell_name} to ${installdir}. \033[0m"
-		cp ${shell_name} /usr/bin/${shell_name} && echo -e "[\033[32;40mINFO\033[0m `date +%Y%m%d-%H:%M:%S`] \033[32;40m cp ${shell_name} finishd. \033[0m" || echo -e "[\033[1;5;41;33mERROR\033[0m `date +%Y%m%d-%H:%M:%S`] \033[1;41;33m copy ${shell_name} FAILED \033[0m"
+		cp ${i} /usr/bin/${shell_name} && echo -e "[\033[32;40mINFO\033[0m `date +%Y%m%d-%H:%M:%S`] \033[32;40m cp ${i} finishd. \033[0m" || echo -e "[\033[1;5;41;33mERROR\033[0m `date +%Y%m%d-%H:%M:%S`] \033[1;41;33m copy ${i} FAILED \033[0m"
 	done
 
 }
@@ -58,6 +59,7 @@ function install_conf() {
 	done
 }
 
+init
 install_shells
 install_man
 install_completion
