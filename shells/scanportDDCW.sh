@@ -35,20 +35,20 @@ ifconfig | grep ${ip} >/dev/null && export localip=0
 [[ "${ip}" == "$(hostname)" ]]
 
 cur_user=$(whoami)
-[[ ${localip} -eq 0 ]] && [[ "${cur_user}" == "root" ]]  && service_name=$(netstat -natp | grep :${j} | grep -v - | head -1 | awk '{print $7}' | awk -F / '{print $2}' | awk -F : '{print $1}')
 
 if [ -z ${port} ];then
 	for j in {1..65535}
 	do
 		if echo &>/dev/null > /dev/tcp/${ip}/${j} ;then
+			[[ ${localip} -eq 0 ]] && [[ "${cur_user}" == "root" ]]  && service_name=$(netstat -natp | grep :${j} | grep -v - | head -1 | awk '{print $7}' | awk -F / '{print $2}' | awk -F : '{print $1}')
 			echo -e "${ip}\t\t\033[31;40m${j}\t\033[0m  is \033[32;40mOPEN\033[0m \t${service_name}"
 		fi
 	done
 else
 	for k in ${port}
 	do
+		[[ ${localip} -eq 0 ]] && [[ "${cur_user}" == "root" ]]  && service_name=$(netstat -natp | grep :${j} | grep -v - | head -1 | awk '{print $7}' | awk -F / '{print $2}' | awk -F : '{print $1}')
 		if echo &>/dev/null > /dev/tcp/${ip}/${k} ;then
-			#[[ ${localip} -eq 0 ]] && [[ "${cur_user}" == "root" ]]  && service_name=$(netstat -natp | grep :${j} | grep -v - | head -1 | awk '{print $7}' | awk -F / '{print $2}' | awk -F : '{print $1}')
 			echo -e "${ip}\t\033[31;40m${k}\t\033[0m  is \033[32;40mOPEN\033[0m \t${service_name}"
 		else
 			 echo -e "${ip}\t\033[31;40m${k}\t\033[0m  is \033[31;40mCLOSE\033[0m"
