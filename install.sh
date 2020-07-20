@@ -6,15 +6,23 @@
 #at 20200713 ,add main 
 
 #define variable
-installdir=/tmp/ddcw/install_$(date +%Y%m%d-%H:%M:%S)
-ddcwdir="/usr/local/ddcw"
-rollbackdir=${ddcw}/rollback
-confdir=/etc/ddcw
-mandir=/usr/share/man
-completion=/etc/bash_completion.d
+installdir=/tmp/ddcw/install_$(date +%Y%m%d-%H:%M:%S)  	#for install only
+ddcwdir="/usr/local/ddcw" 		#ddcw install dir
+rollbackdir=${ddcw}/rollback 		#ddcw save old release after remove or update, only 2 releases
+confdir=/etc/ddcw           		#ddcw config dir
+mandir=/usr/share/man      		#default man dir 
+completion=/etc/bash_completion.d  	#default completion dir
 
-default_conf=ddcw.conf
-custom_conf=custom.conf
+ddcw_conf=ddcw.conf    			#ddcw current config file
+default_conf=default.conf 		#ddcw default dir, this file is dead where release is make sure
+
+#define variable  for Install_Sctipts only
+BASE_INSTALL_DIR="/usr/local"		#for install_scripts default install dir
+BASE_LOG="/logs"			#for install_scripts default log dir , such as /logs/nginx/error.log . 
+SYSTEM_ENABLED=1  			#use systemctl or service for manage software 
+ONBOOT=1  		#enable  start on boot
+
+
 
 function init() {
 	current_user=$(whoami)
