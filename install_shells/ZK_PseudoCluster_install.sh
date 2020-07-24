@@ -206,7 +206,6 @@ WantedBy=multi-user.target
 EOF
 }
 
-
 	
 [[ -f /etc/ddcw/conf/ddcw.conf ]] && when_ddcw_pre
 init_variable
