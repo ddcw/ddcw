@@ -57,12 +57,6 @@ function init_variable() {
 dtbegin=`date +%s`
 thiscript=$0
 
-[[ -f ${SCRIPT_DIR_CONFIG}/zookeeper/.install.log ]] && exits  "this script maybe installed, you should remove it first "
-
-
-
-
-cluster_nodes=$(eval echo {1..$[ ${nodes} ]})
 
 function echo_color() {
   case $1 in
@@ -214,10 +208,13 @@ EOF
 
 
 	
-
 [[ -f /etc/ddcw/conf/ddcw.conf ]] && when_ddcw_pre
-
 init_variable
+
+[[ -f ${SCRIPT_DIR_CONFIG}/zookeeper/.install.log ]] && exits  "this script maybe installed, you should remove it first "
+cluster_nodes=$(eval echo {1..$[ ${nodes} ]})
+
+
 init_pre
 init_first
 install
