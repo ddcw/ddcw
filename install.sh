@@ -41,6 +41,7 @@ function install_shells() {
 		shell_name=$(echo $i | sed 's/.sh$//' | awk -F / '{print $NF}' )
 		[[ -f /usr/bin/${shell_name} ]] && mv /usr/bin/${shell_name} ${installdir} && echo -e "[\033[32;40mINFO\033[0m `date +%Y%m%d-%H:%M:%S`] \033[32;40m backup /usr/bin/${shell_name} to ${installdir}. \033[0m"
 		cp ${i} /usr/bin/${shell_name} && echo -e "[\033[32;40mINFO\033[0m `date +%Y%m%d-%H:%M:%S`] \033[32;40m cp ${i} finishd. \033[0m" || echo -e "[\033[1;5;41;33mERROR\033[0m `date +%Y%m%d-%H:%M:%S`] \033[1;41;33m copy ${i} FAILED \033[0m"
+		chmod +x /usr/bin/${shell_name}
 	done
 
 }
