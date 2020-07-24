@@ -41,7 +41,7 @@ function exits(){
 }
 
 function when_ddcw_pre() {
-	echo hehe
+	source /etc/ddcw/conf/ddcw.conf
 }
 
 #define variable 

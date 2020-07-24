@@ -8,10 +8,11 @@
 #define variable
 installdir=/tmp/ddcw/install_$(date +%Y%m%d-%H:%M:%S)  	#for install only
 ddcwdir="/usr/local/ddcw" 		#ddcw install dir
-rollbackdir=${ddcw}/rollback 		#ddcw save old release after remove or update, only 2 releases
-confdir=/etc/ddcw           		#ddcw config dir
+rollbackdir=${ddcwdir}/rollback 		#ddcw save old release after remove or update, only 2 releases
+confdir=/etc/ddcw/conf           		#ddcw config dir
 mandir=/usr/share/man      		#default man dir 
 completion=/etc/bash_completion.d  	#default completion dir
+install_shells=${ddcwdir}/install_shells	#for install_shells only
 
 ddcw_conf=ddcw.conf    			#ddcw current config file
 default_conf=default.conf 		#ddcw default dir, this file is dead where release is make sure
@@ -32,7 +33,7 @@ function init() {
 		echo -e "[\033[31;40mWARNNING\033[0m `date +%Y%m%d-%H:%M:%S`] \033[31;40m current user is ${current_user}, you must run install.sh as ROOT .\033[0m"
 		exit 1
 	fi
-	mkdir -p ${installdir} ${ddcwdir} ${rollbackdir} ${confdir} ${mandir} ${completion} ${SCRIPT_DIR_CONFIG}
+	mkdir -p ${installdir} ${ddcwdir} ${rollbackdir} ${confdir} ${mandir} ${completion} ${SCRIPT_DIR_CONFIG} ${rollbackdir}/conf/
 }
 
 function install_shells() {
@@ -66,7 +67,18 @@ function install_completion() {
 function install_conf() {
 	for i in ./conf/*
 	do
-		[[ -f ${confdir}/${i} ]] && mv ${confdir}/${i} ${installdir}
+		file_name=$(echo $i | awk -F / '{print $NF}' )
+		[[ -f ${confdir}/${file_name} ]] && mv ${confdir}/${file_name} ${rollbackdir}/conf/${file_name}$(date +%Y%m%d-%H:%M:%S)
+		cp $i ${confdir}
+	done
+}
+
+function install_install_shells() {
+	for i in ./install_shells/*
+	do
+		script_name=$(echo $i | awk -F / '{print $NF}' )
+		[[ -f ${install_shells}/${script_name} ]] && mv ${install_shells}/${script_name} ${rollbackdir}/conf/${script_name}$(date +%Y%m%d-%H:%M:%S)
+		cp $i ${install_shells}
 	done
 }
 
