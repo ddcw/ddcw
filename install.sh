@@ -24,6 +24,7 @@ BASE_LOG="/logs"			#for install_scripts default log dir , such as /logs/nginx/er
 SYSTEM_ENABLED=1  			#use systemctl or service for manage software 
 ONBOOT=1  		#enable  start on boot
 SCRIPT_DIR_CONFIG=${confdir}/script_dir_config		#for every install_script to save them config, just like script_dir_config/nginx/nginx.conf.
+ROLLBACK_DIR=${rollbackdir}
 
 
 echo $0 | grep / >/dev/null 2>&1 && cd $(echo ${0%/*})

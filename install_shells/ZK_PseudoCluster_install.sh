@@ -50,7 +50,8 @@ function init_variable() {
 	[[ -z ${ONBOOT} ]] && ONBOOT=""
 	[[ -z ${SCRIPT_DIR_CONFIG} ]] && SCRIPT_DIR_CONFIG="/etc/ddcw/script_dir_config"
 	[[ -z ${BASE_INSTALL_DIR} ]] && export BASE_INSTALL_DIR="/u01"
-	mkdir -p ${SCRIPT_DIR_CONFIG} ${BASE_INSTALL_DIR}
+	[[ -z ${ROLLBACK_DIR} ]] && export ROLLBACK_DIR=/tmp
+	mkdir -p ${SCRIPT_DIR_CONFIG} ${BASE_INSTALL_DIR} ${ROLLBACK_DIR}
 	export nodes=3 #for cluster number
 }
 
@@ -145,7 +146,7 @@ EOF
 function install_post() {
 	#zkPseudo for control zookeeper psedudo cluster
 	#zkPseudo start | stop | restart | status [NUMBER]
-	[[ -f /usr/bin/zkPseudo ]] && mv /usr/bin/zkPseudo /usr/bin/zkPseudo.bak$(date +%Y%m%d-%H:%M:%S)
+	[[ -f /usr/bin/zkPseudo ]] && mv /usr/bin/zkPseudo ${ROLLBACK_DIR}/zkPseudo.bak$(date +%Y%m%d-%H:%M:%S)
 	cat << EOF > /usr/bin/zkPseudo
 #!/bin/env bash
 case \$1 in 
