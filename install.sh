@@ -16,11 +16,13 @@ completion=/etc/bash_completion.d  	#default completion dir
 ddcw_conf=ddcw.conf    			#ddcw current config file
 default_conf=default.conf 		#ddcw default dir, this file is dead where release is make sure
 
+
 #define variable  for Install_Sctipts only
 BASE_INSTALL_DIR="/usr/local"		#for install_scripts default install dir
 BASE_LOG="/logs"			#for install_scripts default log dir , such as /logs/nginx/error.log . 
 SYSTEM_ENABLED=1  			#use systemctl or service for manage software 
 ONBOOT=1  		#enable  start on boot
+SCRIPT_DIR_CONFIG=${confdir}/script_dir_config		#for every install_script to save them config, just like script_dir_config/nginx/nginx.conf.
 
 
 
@@ -30,7 +32,7 @@ function init() {
 		echo -e "[\033[31;40mWARNNING\033[0m `date +%Y%m%d-%H:%M:%S`] \033[31;40m current user is ${current_user}, you must run install.sh as ROOT .\033[0m"
 		exit 1
 	fi
-	mkdir -p ${installdir} ${ddcwdir} ${rollbackdir} ${confdir} ${mandir} ${completion}
+	mkdir -p ${installdir} ${ddcwdir} ${rollbackdir} ${confdir} ${mandir} ${completion} ${SCRIPT_DIR_CONFIG}
 }
 
 function install_shells() {
