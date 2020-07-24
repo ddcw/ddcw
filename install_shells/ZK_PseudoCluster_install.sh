@@ -40,6 +40,9 @@ function exits(){
   exit 1
 }
 
+function when_ddcw_pre() {
+	echo hehe
+}
 
 #define variable 
 SYSTEM_ENABLED=""
@@ -152,28 +155,28 @@ function install_post() {
 #!/bin/env bash
 case \$1 in 
 	start|START|Start|star)
-		[[ -f ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\$2.cfg ]] && ${BASE_INSTALL_DIR}/zookeeper/bin/zkServer.sh start ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\${2}.cfg
+		[[ -f ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\$2.cfg ]] && ${BASE_INSTALL_DIR}/zookeeper/bin/zkServer.sh start ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\${2}.cfg && exit 0
 		for i in ${cluster_nodes}
 		do
 			${BASE_INSTALL_DIR}/zookeeper/bin/zkServer.sh start ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\${i}.cfg
 		done
 			;;
         restart|RESTART|Restart|res)
-		[[ -f ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\$2.cfg ]] && ${BASE_INSTALL_DIR}/zookeeper/bin/zkServer.sh restart ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\${2}.cfg
+		[[ -f ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\$2.cfg ]] && ${BASE_INSTALL_DIR}/zookeeper/bin/zkServer.sh restart ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\${2}.cfg && exit 0
                 for i in ${cluster_nodes}
                 do
                         ${BASE_INSTALL_DIR}/zookeeper/bin/zkServer.sh start ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\${i}.cfg
                 done
                         ;;
 	stop|STOP|Stop|sto)
-		[[ -f ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\$2.cfg ]] && ${BASE_INSTALL_DIR}/zookeeper/bin/zkServer.sh stop ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\${2}.cfg
+		[[ -f ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\$2.cfg ]] && ${BASE_INSTALL_DIR}/zookeeper/bin/zkServer.sh stop ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\${2}.cfg && exit 0
 		for i in ${cluster_nodes}
                 do
                         ${BASE_INSTALL_DIR}/zookeeper/bin/zkServer.sh stop ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\${i}.cfg
                 done
                         ;;
 	status|STATUS|Status|stat)
-		[[ -f ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\$2.cfg ]] && ${BASE_INSTALL_DIR}/zookeeper/bin/zkServer.sh status ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\${2}.cfg
+		[[ -f ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\$2.cfg ]] && ${BASE_INSTALL_DIR}/zookeeper/bin/zkServer.sh status ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\${2}.cfg && exit 0
                 for i in ${cluster_nodes}
                 do
                         ${BASE_INSTALL_DIR}/zookeeper/bin/zkServer.sh status ${BASE_INSTALL_DIR}/zookeeper/conf/zoo_\${i}.cfg
@@ -206,6 +209,11 @@ PrivateTmp=true
 [Install]
 WantedBy=multi-user.target
 EOF
+}
+
+function when_ddcw_post() {
+	echo hehe
+
 }
 
 	
