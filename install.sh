@@ -33,7 +33,7 @@ function init() {
 		echo -e "[\033[31;40mWARNNING\033[0m `date +%Y%m%d-%H:%M:%S`] \033[31;40m current user is ${current_user}, you must run install.sh as ROOT .\033[0m"
 		exit 1
 	fi
-	mkdir -p ${installdir} ${ddcwdir} ${rollbackdir} ${confdir} ${mandir} ${completion} ${SCRIPT_DIR_CONFIG} ${rollbackdir}/conf/
+	mkdir -p ${installdir} ${ddcwdir} ${rollbackdir} ${confdir} ${mandir} ${completion} ${SCRIPT_DIR_CONFIG} ${rollbackdir}/conf/ ${install_shells}
 }
 
 function install_shells() {
