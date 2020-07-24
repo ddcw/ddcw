@@ -45,22 +45,23 @@ function when_ddcw_pre() {
 }
 
 #define variable 
-SYSTEM_ENABLED=""
-ONBOOT=""
-SCRIPT_DIR_CONFIG=""
-
+function init_variable() {
+	[[ -z ${SYSTEM_ENABLED} ]] && SYSTEM_ENABLED=""
+	[[ -z ${ONBOOT} ]] && ONBOOT=""
+	[[ -z ${SCRIPT_DIR_CONFIG} ]] && SCRIPT_DIR_CONFIG="/etc/ddcw/script_dir_config"
+	[[ -z ${BASE_INSTALL_DIR} ]] && export BASE_INSTALL_DIR="/u01"
+	mkdir -p ${SCRIPT_DIR_CONFIG} ${BASE_INSTALL_DIR}
+	export nodes=3 #for cluster number
+}
 
 dtbegin=`date +%s`
 thiscript=$0
-[[ -f /etc/ddcw/conf/ddcw.conf ]] && source /etc/ddcw/conf/ddcw.conf
 
 [[ -f ${SCRIPT_DIR_CONFIG}/zookeeper/.install.log ]] && exits  "this script maybe installed, you should remove it first "
 
-[[ -z ${BASE_INSTALL_DIR} ]] && export BASE_INSTALL_DIR="/u01"
 
 
 
-nodes=3
 cluster_nodes=$(eval echo {1..$[ ${nodes} ]})
 
 function echo_color() {
@@ -211,17 +212,18 @@ WantedBy=multi-user.target
 EOF
 }
 
-function when_ddcw_post() {
-	echo hehe
-
-}
 
 	
+
+[[ -f /etc/ddcw/conf/ddcw.conf ]] && when_ddcw_pre
+
+init_variable
 init_pre
 init_first
 install
 install_post
 
+#[[ -f /etc/ddcw/conf/ddcw.conf ]] && when_ddcw_post
 
 echo_color info "zkPseudo start|stop|status [NODE_NUMBER]"
 [[ ${SYSTEM_ENABLED} -eq 1 ]] && echo_color info "systemctl start|stop|restart|status|enabled zkPseudo"
