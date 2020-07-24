@@ -34,24 +34,31 @@
 #                   .,:;iirrrrrrrrrrrrrrrrri;:.                        
 #                         ..,:::;;;;:::,,.                             
 #                                                                       
-
-#define variable 
-
-
-dtbegin=`date +%s`
-thiscript=$0
-[[ -f /etc/ddcw/conf/ddcw.conf ]] && source /etc/ddcw/conf/ddcw.conf
-[[ -z ${BASE_INSTALL_DIR} ]] && export BASE_INSTALL_DIR="/u01"
-
-
-nodes=3
-cluster_nodes=$(eval echo {1..$[ ${nodes} ]})
-
 function exits(){
   echo -e "[`date +%Y%m%d-%H:%M:%S`] \033[31;40m$1\033[0m"
   [ -z $2 ] && exit $2
   exit 1
 }
+
+
+#define variable 
+SYSTEM_ENABLED=""
+ONBOOT=""
+SCRIPT_DIR_CONFIG=""
+
+
+dtbegin=`date +%s`
+thiscript=$0
+[[ -f /etc/ddcw/conf/ddcw.conf ]] && source /etc/ddcw/conf/ddcw.conf
+
+[[ -f ${SCRIPT_DIR_CONFIG}/zookeeper/.install.log ]] && exits  "this script maybe installed, you should remove it first "
+
+[[ -z ${BASE_INSTALL_DIR} ]] && export BASE_INSTALL_DIR="/u01"
+
+
+
+nodes=3
+cluster_nodes=$(eval echo {1..$[ ${nodes} ]})
 
 function echo_color() {
   case $1 in
