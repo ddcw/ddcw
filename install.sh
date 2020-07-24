@@ -26,6 +26,7 @@ ONBOOT=1  		#enable  start on boot
 SCRIPT_DIR_CONFIG=${confdir}/script_dir_config		#for every install_script to save them config, just like script_dir_config/nginx/nginx.conf.
 
 
+echo $0 | grep / >/dev/null 2>&1 && cd $(echo ${0%/*})
 
 function init() {
 	current_user=$(whoami)
@@ -78,7 +79,7 @@ function install_install_shells() {
 	do
 		script_name=$(echo $i | awk -F / '{print $NF}' )
 		[[ -f ${install_shells}/${script_name} ]] && mv ${install_shells}/${script_name} ${rollbackdir}/conf/${script_name}$(date +%Y%m%d-%H:%M:%S)
-		cp $i ${install_shells}
+		cp $i ${install_shells}/
 	done
 }
 
