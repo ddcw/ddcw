@@ -87,3 +87,4 @@ install_shells
 install_man
 install_completion
 install_conf
+install_install_shells
