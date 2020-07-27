@@ -108,7 +108,8 @@ function init_first() {
 }
 
 function install() {
-	tar -zxvf ${zkpack} -C 	${BASE_INSTALL_DIR} 1>/dev/null
+	[[ -d ${BASE_INSTALL_DIR}/zookeeper ]] && exits "${BASE_INSTALL_DIR}/zookeeper exits"
+	tar -zxvf ${zkpack} -C 	${BASE_INSTALL_DIR} 1>/dev/null || exits "tar -zxvf faild , maybe no tar"
 	mv ${BASE_INSTALL_DIR}/${zkname} ${BASE_INSTALL_DIR}/zookeeper
 	
 	#cluster info
