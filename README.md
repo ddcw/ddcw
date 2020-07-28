@@ -25,7 +25,9 @@ main shells will copy to /usr/bin and chmod +x shells/
 
 
 # DETAILS
-$\color{#00BFFF}{```scanportDDCW.sh```}$  
-用法:sscanportDDCW [ip IPADDR] [port PORT] [time TIME_INTERVAL]  
-
+- scanportDDCW:
+  ``` shell
+  scanportDDCW [ip IPV4_ADDR] [port PORT] [time TIME_INTERVAL]
+  scanportDDCW ip 127.0.0.1 port 1521 time 1 
+  ```
 
