@@ -27,3 +27,4 @@ main shells will copy to /usr/bin and chmod +x shells/
 # DETAILS
 ```scanportDDCW.sh```
 用法:sscanportDDCW [ip IPADDR] [port PORT] [time TIME_INTERVAL]
+
