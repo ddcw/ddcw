@@ -22,3 +22,5 @@ mayby shell script has readme
 ## shells
 main shells will copy to /usr/bin and chmod +x shells/
 这里的脚本会被拷贝到 /usr/bin下面去, 比如ddcw  scanportDDCW
+
+
