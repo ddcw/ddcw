@@ -37,4 +37,10 @@ main shells will copy to /usr/bin and chmod +x shells/
   ``` shell
  	CheckCommDDCW [PARAMETER]
   ```
+  
+- ZK_PseudoCluster_install.sh:  
+安装zookeeper伪集群的,默认端口是218+node 比如2181 2182 2183 这样子的,目前版本不支持参数  
+  ``` shell
+        /usr/local/ddcw/install_shells/ZK_PseudoCluster_install.sh 
+  ```
 
