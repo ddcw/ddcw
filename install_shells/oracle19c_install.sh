@@ -4,23 +4,15 @@
 #this script only install oracle after complete Check_ENV_ORACLE. So you should check ENV first ,of course you can run install_shells/CheckOracleENV20200328_19C.sh to set ENV
 #scriptName: oracle19c_install.sh
 
+#change log
+#2020728 add main,zhu yao gong neng dou shi jin tian xie da. sai guo li hai tie ya zi da.
+
 #define variable
 begintime=`date +%s`
 dt=$(date +%Y%m%d-%H%M%S)
-thiscript=$0
-log_detail=.${thiscript}_${dt}.log
 PARAM=$@
 current_pwd=`pwd`
-exit_flag=99
-ORACLE_BASE=${ORACLE_BASE%*/}
-ORACLE_HOME=${ORACLE_HOME%*/}
-CURRENT_USER=$(id | awk -F uid= '{print $2}' | awk -F '(' '{print $2}' | awk -F ')' '{print $1}')
-CURRENT_USER_GROUP=$(id | awk -F gid= '{print $2}' | awk -F '(' '{print $2}' | awk -F ')' '{print $1}')
 
-#pga_size MB
-pga_aggregate_target=`cat /proc/meminfo | grep MemTotal | awk '{print $2/1024/5*2/4}' | awk -F . '{print $1}'`
-#sga_size MB
-sga_target=`cat /proc/meminfo | grep MemTotal | awk '{print $2/1024/5*2/4*3}' | awk -F . '{print $1}'`
 
 
 #run this function and exit with $2
@@ -59,11 +51,11 @@ function echo_color() {
   esac
 }
 
-#bak file function, but abandonmented
+#bak file function, bak_file FILENAME but abandonmented
 function bak_file() {
-  [ -d /root/bak_file ] || mkdir /root/bak_file
+  [ -d ~/bak_file ] || mkdir ~/bak_file
   filename=`echo $1 |sed 's/\//_/g'`
-  cp -f $1 /root/bak_file/${filename}_${dt}
+  cp -f $1 ~/bak_file/${filename}_${dt}
 }
 
 
@@ -83,7 +75,12 @@ function init_parameter() {
 	export  open_cursors=1000
 	export  processes=3000
 	export  EMPORT=5500
+
+	export ORACLE_SOFTWARE_NAME="LINUX.X64_193000_db_home.zip"
+	
 	[[ -z ${BASE_INSTALL_DIR} ]] && export BASE_INSTALL_DIR="/usr/local/oracle19c"
+	export  ASROOT_RUN="/tmp/.asrootRunscript.sh"
+	echo '' > ${ASROOT_RUN} || exits "current user cant use /tmp or full"
 
 	#pga_size MB
 	export PGA_AGGREGATE_TARGET=$(cat /proc/meminfo | grep MemTotal | awk '{print $2/1024/5*2/4}' | awk -F . '{print $1}')
@@ -100,14 +97,47 @@ function check_env() {
 	do
 		env | grep ${i}= >/dev/null 2>&1 || exits "current ENV has not ${i} , you should set it and run again."
 	done
+	
+	#get oracle19c software , or exit
+	[[ -z ${ORACLE_SOFTWARE} ]] && export ORACLE_SOFTWARE=$(find / -name ${ORACLE_SOFTWARE_NAME} 2>/dev/null | head -1)
+	[[ -z ${ORACLE_SOFTWARE} ]] && exits "no software ${ORACLE_SOFTWARE_NAME}"
+
+	#check SPACE 
+	[[ $(du -s ${ORACLE_HOME} | awk '{print $1}') -gt 10000 ]] && exits "maybe oracle has install, ${ORACLE_HOME} is not null "
+	[[ $(df -P ${ORACLE_HOME} | tail -1 | awk '{print $(NF-2)}') -lt 8000000 ]] && exits "${ORACLE_HOME} size too little, must > 8GB"
+	[[ $(df -P ${ORACLE_BASE} | tail -1 | awk '{print $(NF-2)}') -lt 13000000 ]] && exits "${ORACLE_HOME} size too little, must > 13GB"
+	[[ $(df -P /tmp | tail -1 | awk '{print $(NF-2)}') -gt 1500000 ]] || exits '/tmp must greate 1.5G'
+
+
+	#sga size
+	[ "${SGA_TARGET}" -lt "800" ] && exits "sga_target ${SGA_TARGET} is too small, needs to be at least 784M"
+
+	#check directories
+	[[ $(wc -l ${ASROOT_RUN} | awk '{print $1}') -gt 1 ]] && exits "you should mkdir some of directories and to grant authorization . just like ${ASROOT_RUN}"
+
 }
 
-function mkdir_permit() {
-	mkdir -p ${ORACLE_HOME} ${ORACLE_BASE} ${BASE_INSTALL_DIR}
+function mkdir_authorization() {
+	#make need directories, if rootPassword=XXXX, su_command mkdir and  chown
+	need_dir="${ORACLE_HOME} ${ORACLE_BASE} ${BASE_INSTALL_DIR} ${INVENTORY_LOCATION_DIR}"
+	if [[ -z ${rootpassword} ]]
+	then
+		for i in ${need_dir}
+		do
+			mkdir -p $i || echo "mkdir -p $i" >> ${ASROOT_RUN}
+			touch ${i}/.flag_judge_Authority && rm -rf ${i}/.flag_judge_Authority || echo "chown -R ${CURRENT_USER}:${CURRENT_USER_GROUP} $i" >> ${ASROOT_RUN}
+		done
+	else
+		for i in ${need_dir}
+		do
+			su_command "mkdir -p ${i}"
+			su_command "chown -R ${CURRENT_USER}:${CURRENT_USER_GROUP} $i"
+		done
+	fi
 }
 
 function unzip_to_ORACLE_HOME() {
-	echo tar	
+	unzip -q ${ORACLE_SOFTWARE} -d ${ORACLE_HOME}
 }
 
 function check_PACK() {
@@ -126,7 +156,7 @@ function check_PACK() {
 		return 0
 	else
 		echo_color warn "${noinstall_pack} is not install , you should install then and run again , or use IGNORE_PACK=1 to force run script"
-		return 1
+		[[ -z ${rootpassword} ]] && su_command "yum -y install ${noinstall_pack}" || return 1
 	fi
 }
 
@@ -260,14 +290,101 @@ EOF
 #install oracle software only
 function install_db_software() {
 	echo install dbinstall
+	$ORACLE_HOME/runInstaller  -silent -ignoreSysPrereqs  -ignorePrereq  -showProgress -responseFile  ${BASE_INSTALL_DIR}/db_install.rsp >${BASE_INSTALL_DIR}/db_install.log
 }
 
 #install netca
 function install_netca() {
 	echo install netca
+	${ORACLE_HOME}/bin/netca -silent -responsefile ${BASE_INSTALL_DIR}/netca.rsp > ${BASE_INSTALL_DIR}/netca.log
 }
 
 #install dbca
 function install_dbca() {
 	echo dbca
+	if [[ ${NOPDB} -eq 1 ]]
+	then
+		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca_NOPDB.rsp > ${BASE_INSTALL_DIR}/dbca.log
+	else
+		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca.rsp > ${BASE_INSTALL_DIR}/dbca.log
+	fi
 }
+
+#install post, clear, start_stop,backup
+function set_clearFS() {
+	echo "to be continued"
+}
+
+function set_start_stop() {
+	#this script is too old, need to rewrite
+        [ -d ~/scripts/  ] || mkdir ~/scripts/
+        startup_txt="
+#!/bin/env bash\n
+lsnrctl start >/dev/null 2>&1\n
+sqlplus / as sysdba <<EOF\n
+startup\n
+alter pluggable database all open;\n
+EOF\n
+"
+        echo -e ${startup_txt} > ~/scripts/oracle_start.sh
+        chmod +x  ~/scripts/oracle_start.sh
+        sed -i 's/^\s*//' ~/scripts/oracle_start.sh
+        stop_txt="
+#!/bin/env bash\n
+lsnrctl stop >/dev/null 2>&1\n
+sqlplus / as sysdba <<EOF\n
+shutdown immediate\n
+EOF\n
+"
+        echo -e ${stop_txt} > ~/scripts/oracle_stop.sh
+        chmod +x  ~/scripts/oracle_stop.sh
+        sed -i 's/^\s*//' ~/scripts/oracle_stop.sh
+echo_color info "set  ~/scripts/oracle_stop.sh ~/scripts/oracle_start.sh finish"
+echo_color info "start: ~/scripts/oracle_start.sh"
+echo_color info "stop: ~/scripts/oracle_stop.sh"
+
+}
+
+
+function set_Backup() {
+	echo "to be continued..."
+}
+
+function isntall_post() {
+	set_clearFS
+	set_start_stop
+	set_Backup
+}
+
+#help this script
+function help_this_script() {
+	echo help
+}
+
+#to config user set variable
+function configUSERset() {
+	echo hhee
+}
+
+#this is main,ko no DIO da
+function main_() {
+	echo main	
+	init_parameter
+	configUSERset
+	mkdir_authorization
+	[[ ${IGNORE_PACK} -eq 1 ]] ||  check_PACK
+	check_env
+	unzip_to_ORACLE_HOME
+
+	init_db_install_rsp
+	init_netca_rsp
+	init_dbca_rsp
+
+	install_db_software
+	install_netca
+	install_dbca
+	
+	isntall_post
+	
+}
+main_
