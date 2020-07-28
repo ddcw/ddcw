@@ -26,6 +26,7 @@ main shells will copy to /usr/bin and chmod +x shells/
 
 # DETAILS
 - scanportDDCW:
+扫描主机端口的,默认本机(0.0.0.0),默认所有端口,time参数表示间隔多少秒扫描一次  
   ``` shell
   scanportDDCW [ip IPV4_ADDR] [port PORT] [time TIME_INTERVAL]
   scanportDDCW ip 127.0.0.1 port 1521 time 1 
