@@ -30,5 +30,11 @@ main shells will copy to /usr/bin and chmod +x shells/
   ``` shell
   scanportDDCW [ip IPV4_ADDR] [port PORT] [time TIME_INTERVAL]
   scanportDDCW ip 127.0.0.1 port 1521 time 1 
+    ```
+
+- CheckCommDDCW:  
+校验当前用户拥有的命令的MD5,具体的用法我也忘了,可以看看:https://cloud.tencent.com/developer/article/1597040  
+  ``` shell
+ 	CheckCommDDCW [PARAMETER]
   ```
 
