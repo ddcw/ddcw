@@ -1,0 +1,127 @@
+#!/bin/env bash
+#write by ddcw at 20200410
+#modified by ddcw at 20200428
+
+export LANG=en_US.UTF-8
+
+if  ! which expect >/dev/null 2>&1 
+then
+	echo -e " [\033[1;5;41;33mERROR\033[0m `date +%Y%m%d-%H:%M:%SOURCE`] \033[1;41;33myou should install expect first\033[0m :\n\t\t \033[32;40myum install expect -y\033[0m"
+	exit 1
+fi
+
+dt=$(date +%Y%m%d-%H%M%SOURCE)
+
+function get_ssh_keygen() {
+	tpe=$1
+        expect << EOF >/dev/null
+        set timeout 30
+        spawn  /usr/bin/ssh-keygen -t ${tpe}
+        expect {
+                        "sa):" {send "\r";exp_continue}
+                        "passphrase):" {send "\r";exp_continue}
+                        "again:" {send "\r"}
+        }
+        expect eof
+EOF
+}
+function ssh_command(){
+        user_host=$1
+	user=$(echo ${user_host} | awk -F @ '{print $1}')
+	[ -z ${user} ] && user=${user_host}
+        commd=$2
+        password=$3
+	expect << EOF >/dev/null
+        set timeout 30
+        spawn ssh  -p ${sshport} ${user_host} ${commd}
+        expect { 
+                        "(yes/no" {send "yes\r";exp_continue}
+                        "password:" {send "${password}\r"}
+        }
+        expect "${user}@*" {send "exit\r"}
+        expect eof
+EOF
+}
+
+
+function help_this_script() {
+	echo '------------------------'
+	echo -e "[\033[1;5;41;33mHELP\033[0m `date +%Y%m%d-%H:%M:%SOURCE`] \033[1;41;33mexample: sshNopasswd [USERNAME@]hsotname[:SSHPORT] [PASSWORD]\033[0m"
+	#echo "example: sshNopasswd $(whoami)@$(last | head -1 | awk '{print $3}') "
+	echo '------------------------'
+	echo -e "[\033[32;40mINFO\033[0m `date +%Y%m%d-%H:%M:%SOURCE`] \033[32;40myou can set sshNopassword sshport in ~/.sshNopasswd.conf; formats:HOSTNAME  SSHPORT\033[0m"
+	echo '------------------------'
+	exit 0
+}
+
+case $1 in
+	-h|-H|h|H|help|HELP|-help|-HELP|--help|--HELP|help=y|HELP=Y|?|-?)
+		help_this_script;;
+esac
+
+if [ -z $1 ]
+then
+	help_this_script
+	exit 1
+fi
+
+export username=$(echo $1 | awk -F \@ '{print $1}' | awk -F : '{print $1}')
+export host_d=$(echo $1 | awk -F @ '{print $2}' | awk -F : '{print $1}')
+echo $1 | grep : 1>/dev/null && export sshport=$(echo $1 | awk -F : '{print $NF}')
+[ -z ${host_d} ] && export username=$(whoami) && export host_d=$(echo $1 | awk -F : '{print $1}')
+[ -z ${sshport} ] && [ -f ~/.sshNopasswd.conf ] && export sshport=$(grep ${host_d} ~/.sshNopasswd.conf 2>/dev/null | tail -1 | awk '{print $2}')
+[ -z ${sshport} ] && export sshport=22
+
+if ping -c 1 ${host_d} >/dev/null ;then
+	if echo &>/dev/null > /dev/tcp/${host_d}/${sshport}
+	then
+		echo -e "[\033[32;40mINFO\033[0m `date +%Y%m%d-%H:%M:%SOURCE`] \033[32;40mbegin ssh(user port ${sshport}) config for ${1}\033[0m"
+	else
+		echo -e "[\033[1;5;41;33mERROR\033[0m `date +%Y%m%d-%H:%M:%SOURCE`] \033[1;41;33m ${host_d}:${sshport} is not ESTABLISHED\033[0m"
+		exit 1
+	fi
+else
+	echo -e "[\033[1;5;41;33mERROR\033[0m `date +%Y%m%d-%H:%M:%SOURCE`] \033[1;41;33m ${host_d} Network unreachable\033[0m"
+	exit 1
+fi
+
+	
+if [ ! -f ~/.ssh/id_rsa ]
+then
+mv ~/.ssh ~/.ssh${dt}
+get_ssh_keygen rsa
+get_ssh_keygen dsa
+fi
+if [ ! -f ~/.ssh/id_rsa.pub ]
+then
+mv ~/.ssh ~/.ssh${dt}
+get_ssh_keygen rsa
+get_ssh_keygen dsa
+fi
+
+if [ ! -f ~/.ssh/id_dsa ]
+then
+mv ~/.ssh ~/.ssh${dt}
+get_ssh_keygen dsa
+get_ssh_keygen rsa
+fi
+if [ ! -f ~/.ssh/id_dsa.pub ]
+then
+mv ~/.ssh ~/.ssh${dt}
+get_ssh_keygen dsa
+get_ssh_keygen rsa
+fi
+
+[ -f ~/.ssh${dt}/authorized_keys ] && cp ~/.ssh${dt}/authorized_keys ~/.ssh/authorized_keys
+
+
+ssh_rsa_pub=$(cat  ~/.ssh/id_rsa.pub | awk '{print $1 " " $2}')
+ssh_dsa_pub=$(cat  ~/.ssh/id_dsa.pub | awk '{print $1 " " $2}')
+
+[ -z ${2} ] && read -t 60 -p "please input ${username}@${host_d} password:" password
+[ -z ${2} ] || export password=$2
+
+ssh_command  ${username}@${host_d} 'mkdir -p touch ~/.ssh' ${password}
+ssh_command  ${username}@${host_d} '\[ -f ~/.ssh/authorized_keys \] || touch ~/.ssh/authorized_keys' ${password}
+ssh_command  ${username}@${host_d} " grep '${ssh_rsa_pub}' ~/.ssh/authorized_keys >/dev/null || echo '${ssh_rsa_pub}' >> ~/.ssh/authorized_keys" ${password}
+ssh_command  ${username}@${host_d} " grep '${ssh_dsa_pub}' ~/.ssh/authorized_keys >/dev/null || echo '${ssh_dsa_pub}' >> ~/.ssh/authorized_keys" ${passwd}

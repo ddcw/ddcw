@@ -38,6 +38,14 @@ main shells will copy to /usr/bin and chmod +x shells/
  	CheckCommDDCW [PARAMETER]
   ```
   
+- sshNopasswd:  
+配置ssh免密登录的,也就是把自己的公钥拷贝到目标用户的.ssh/authorized_keys 文件  
+具体的用法我也忘了... https://cloud.tencent.com/developer/article/1612304  
+  ``` shell
+         sshNopasswd  [用户名@]主机名  [密码]
+  ```
+
+  
 - ZK_PseudoCluster_install.sh:  
 安装zookeeper伪集群的,默认端口是218+node 比如2181 2182 2183 这样子的,目前版本不支持参数  
   ``` shell
