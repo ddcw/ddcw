@@ -42,7 +42,7 @@ main shells will copy to /usr/bin and chmod +x shells/
 配置ssh免密登录的,也就是把自己的公钥拷贝到目标用户的.ssh/authorized_keys 文件  
 具体的用法我也忘了... https://cloud.tencent.com/developer/article/1612304  
   ``` shell
-         sshNopasswd  [用户名@]主机名  [密码]
+         sshNopasswd  [用户名@]主机名[:端口]  [密码]
   ```
 
   
