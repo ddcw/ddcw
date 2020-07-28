@@ -24,3 +24,6 @@ main shells will copy to /usr/bin and chmod +x shells/
 这里的脚本会被拷贝到 /usr/bin下面去, 比如ddcw  scanportDDCW
 
 
+# DETAILS
+```scanportDDCW.sh```
+用法:sscanportDDCW [ip IPADDR] [port PORT] [time TIME_INTERVAL]
