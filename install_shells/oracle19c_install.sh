@@ -1,7 +1,7 @@
 #!/bin/env bash
 #write by ddcw at 20200717 first
 #offical url https://docs.oracle.com/en/database/oracle/oracle-database/19/ladbi/index.html
-#this script only install oracle after complete Check_ENV_ORACLE.
+#this script only install oracle after complete Check_ENV_ORACLE. So you should check ENV first ,of course you can run install_shells/CheckOracleENV20200328_19C.sh to set ENV
 #scriptName: oracle19c_install.sh
 
 #define variable
@@ -69,12 +69,31 @@ function bak_file() {
 
 #init user set params
 function init_parameter() {
-	echo abc
+	export	ORACLE_BASE=${ORACLE_BASE%*/}
+	export	ORACLE_HOME=${ORACLE_HOME%*/}
+	export	CURRENT_USER=$(id | awk -F uid= '{print $2}' | awk -F '(' '{print $2}' | awk -F ')' '{print $1}')
+	export	CURRENT_USER_GROUP=$(id | awk -F gid= '{print $2}' | awk -F '(' '{print $2}' | awk -F ')' '{print $1}')
+	[[ -z ${BASE_INSTALL_DIR} ]] && export BASE_INSTALL_DIR="/usr/local/oracle19c"
+
+	#pga_size MB
+	export $PGA_AGGREGATE_TARGET=$(cat /proc/meminfo | grep MemTotal | awk '{print $2/1024/5*2/4}' | awk -F . '{print $1}')
+	#sga_size MB
+	SGA_TARGET=$(cat /proc/meminfo | grep MemTotal | awk '{print $2/1024/5*2/4*3}' | awk -F . '{print $1}')
+
 }
 
 #check env for install oracle, such as space,kernel params,software....
 function check_env() {
-	echo check
+	#check ENV variable
+	ENV_variable="ORACLE_HOME ORACLE_BASE ORACLE_HOSTNAME ORACLE_SID"
+	for i in ${ENV_variable}
+	do
+		env | grep ${i}= >/dev/null 2>&1 || exits "current ENV has not ${i} , you should set it and run again."
+	done
+}
+
+function mkdir_permit() {
+	mkdir -p ${ORACLE_HOME} ${ORACLE_BASE} ${BASE_INSTALL_DIR}
 }
 
 #config dbinstall.rsp
