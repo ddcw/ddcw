@@ -50,7 +50,7 @@ function echo_color() {
       echo -e "[\033[31;40mWARNNING\033[0m `date +%Y%m%d-%H:%M:%S`] \033[31;40m$2\033[0m"
       ;;
     *)
-      echo "Example: echo_color red string"
+      echo "INTERNAL ERROR: echo_color KEY VALUE"
       ;;
   esac
 }
@@ -86,7 +86,7 @@ function init_parameter() {
 	export	ORACLE_HOME=${ORACLE_HOME%*/}
 	export	CURRENT_USER=$(id | awk -F uid= '{print $2}' | awk -F '(' '{print $2}' | awk -F ')' '{print $1}')
 	export	CURRENT_USER_GROUP=$(id | awk -F gid= '{print $2}' | awk -F '(' '{print $2}' | awk -F ')' '{print $1}')
-	export  INVENTORY_LOCATION_DIR=${ORACLE_BASE%/*}
+	export  INVENTORY_LOCATION_DIR=${ORACLE_BASE%/*}/oraInventory
 	export  LISTENER_NAMES="LISTENER"
 	export  LISTENER_PORT=1521
 	export  ORACLE_SID=$(hostname)
@@ -97,6 +97,11 @@ function init_parameter() {
 	export  open_cursors=1000
 	export  processes=3000
 	export  EMPORT=5500
+	export  pdbName=${ORACLE_SID}pdb
+	export  ORADATA=${ORACLE_BASE}/oradata
+	export  sysPassword=${ORACLE_SID}
+	export  systemPassword=${ORACLE_SID}
+	export  pdbAdminPassword=${ORACLE_SID}
 
 	export ORACLE_SOFTWARE_NAME="LINUX.X64_193000_db_home.zip"
 	
@@ -115,16 +120,20 @@ function init_parameter() {
 function check_env() {
 	#check ENV variable
 	ENV_variable="ORACLE_HOME ORACLE_BASE ORACLE_HOSTNAME ORACLE_SID"
+	echo_color info "check ENV ${ENV_variable}"
 	for i in ${ENV_variable}
 	do
 		env | grep ${i}= >/dev/null 2>&1 || exits "current ENV has not ${i} , you should set it and run again."
 	done
 	
 	#get oracle19c software , or exit
+	echo_color info "find software"
 	[[ -z ${ORACLE_SOFTWARE} ]] && export ORACLE_SOFTWARE=$(find / -name ${ORACLE_SOFTWARE_NAME} 2>/dev/null | head -1)
 	[[ -z ${ORACLE_SOFTWARE} ]] && exits "no software ${ORACLE_SOFTWARE_NAME}"
+	echo_color info "ORACLE_SOFTWARE  ${ORACLE_SOFTWARE}"
 
 	#check SPACE 
+	echo_color info  "check SPACE about  ${ORACLE_HOME} ${ORACLE_BASE} /tmp"
 	[[ $(du -s ${ORACLE_HOME} | awk '{print $1}') -gt 10000 ]] && exits "maybe oracle has install, ${ORACLE_HOME} is not null "
 	[[ $(df -P ${ORACLE_HOME} | tail -1 | awk '{print $(NF-2)}') -lt 8000000 ]] && exits "${ORACLE_HOME} size too little, must > 8GB"
 	[[ $(df -P ${ORACLE_BASE} | tail -1 | awk '{print $(NF-2)}') -lt 13000000 ]] && exits "${ORACLE_HOME} size too little, must > 13GB"
@@ -139,16 +148,27 @@ function check_env() {
 
 	#check number: porcess,cursor,sga,pga,listener,emport....
 	need_number="open_cursors processes EMPORT LISTENER_PORT"
+	echo_color info "check ${need_number} IS NUMBER"
 	for i in ${need_number}
 	do
 		#eval hui xian ba bian liang huan chen zhi , zai zhi xing ming ling. ya lei ta lei da zi.
 		[ "$(eval echo \$$i)" -eq "$(eval echo \$$i)" ] 2>/dev/null || exits "$i must number"
 	done
+	
+	#chekc params NOT NULL:DB_NAME gdbName ORACLE_SID ORACLE_HOME ORACLE_BASE INVENTORY_LOCATION_DIR ORADATA characterSet open_cursors processes PGA_AGGREGATE_TARGET SGA_TARGET LISTENER_PORT sysPassword systemPassword pdbAdminPassword
+	need_NOT_NULL="DB_NAME gdbName ORACLE_SID ORACLE_HOME ORACLE_BASE INVENTORY_LOCATION_DIR ORADATA characterSet open_cursors processes PGA_AGGREGATE_TARGET SGA_TARGET LISTENER_PORT sysPassword systemPassword pdbAdminPassword"
+	echo_color info "check ${need_NOT_NULL} is valid"
+	for i in ${need_NOT_NULL}
+	do
+		[[ "$(eval echo \$$i)" == "$(eval echo \$$i)" ]] 2>/dev/null || exits "$i must NOT NULL"
+	done
+	echo_color info "CHECK FINISH"
 }
 
 function mkdir_authorization() {
 	#make need directories, if rootPassword=XXXX, su_command mkdir and  chown
 	need_dir="${ORACLE_HOME} ${ORACLE_BASE} ${BASE_INSTALL_DIR} ${INVENTORY_LOCATION_DIR}"
+	echo_color info "make directories : ${need_dir}"
 	if [[ -z ${rootpassword} ]]
 	then
 		for i in ${need_dir}
@@ -166,6 +186,7 @@ function mkdir_authorization() {
 }
 
 function unzip_to_ORACLE_HOME() {
+	echo_color info "unzip ${ORACLE_SOFTWARE} -d ${ORACLE_HOME}"
 	unzip -q ${ORACLE_SOFTWARE} -d ${ORACLE_HOME}
 }
 
@@ -175,6 +196,7 @@ function check_PACK() {
 	#net-tools for RAC and Clusterware
 	noinstall_pack=""
 	need_packs="unzip bc binutils compat-libcap1 compat-libstdc++-33 glibc glibc-devel ksh libaio libaio-devel libX11 libXau libXi libXtst libXrender libXrender-devel libgcc libstdc++ libxcb make smartmontools sysstat"
+	echo_color info "check pack : ${need_packs}"
 	for i in ${need_packs}
 	do
 		rpm --query --queryformat "%{NAME}" $i >/dev/null 2>&1 || noinstall_pack="${noinstall_pack} $i"
@@ -185,12 +207,13 @@ function check_PACK() {
 		return 0
 	else
 		echo_color warn "${noinstall_pack} is not install , you should install then and run again , or use IGNORE_PACK=1 to force run script"
-		[[ -z ${rootpassword} ]] && su_command "yum -y install ${noinstall_pack}" || return 1
+		[[ -z ${rootpassword} ]] || su_command "yum -y install ${noinstall_pack}" || return 1
 	fi
 }
 
 #config dbinstall.rsp
 function init_db_install_rsp() {
+	echo_color info "${BASE_INSTALL_DIR}/db_install.rsp"
 	cat << EOF > ${BASE_INSTALL_DIR}/db_install.rsp
 oracle.install.responseFileVersion=/oracle/install/rspfmt_dbinstall_response_schema_v19.0.0
 oracle.install.option=INSTALL_DB_SWONLY
@@ -218,6 +241,7 @@ EOF
 
 #config netca.rsp
 function init_netca_rsp() {
+	echo_color info "init ${BASE_INSTALL_DIR}/netca.rsp"
 	cat << EOF > ${BASE_INSTALL_DIR}/netca.rsp
 [GENERAL]
 RESPONSEFILE_VERSION="19.0"
@@ -242,6 +266,7 @@ EOF
 function init_dbca_rsp() {
 	#when NOPDB=1 dbca will use dbca_NOPDB.rsp, other sids use dbca.rsp.
 	#for study will has two dbca reponse file.
+	echo_color info "init ${BASE_INSTALL_DIR}/dbca_NOPDB.rsp"
 	cat << EOF > ${BASE_INSTALL_DIR}/dbca_NOPDB.rsp
 responseFileVersion=/oracle/assistants/rspfmt_dbca_response_schema_v19.0.0
 gdbName=${gdbName}
@@ -278,6 +303,7 @@ automaticMemoryManagement=false
 totalMemory=0
 EOF
 	#with PDBS , pdbName=  initParams=enable_pluggable_database=true
+	echo_color info "init ${BASE_INSTALL_DIR}/dbca.rsp"
 	cat << EOF > ${BASE_INSTALL_DIR}/dbca.rsp
 responseFileVersion=/oracle/assistants/rspfmt_dbca_response_schema_v19.0.0
 gdbName=${gdbName}
@@ -321,8 +347,8 @@ function install_db_software() {
 	echo_color info "install db software"
 	ps -ef | grep "${BASE_INSTALL_DIR}/db_install.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
 	echo '' > ${BASE_INSTALL_DIR}/db_install.log
-	tail -f ${BASE_INSTALL_DIR}/db_install.log
-	$ORACLE_HOME/runInstaller  -silent -ignoreSysPrereqs  -ignorePrereq  -showProgress -responseFile  ${BASE_INSTALL_DIR}/db_install.rsp >${BASE_INSTALL_DIR}/db_install.log
+	tail -f ${BASE_INSTALL_DIR}/db_install.log &
+	$ORACLE_HOME/runInstaller  -ignorePrereq  -silent -noconfig -force -responseFile  ${BASE_INSTALL_DIR}/db_install.rsp >${BASE_INSTALL_DIR}/db_install.log
 	while true
 	do
 		if grep "Successfully Setup Software" ${BASE_INSTALL_DIR}/db_install.log >/dev/null 2>&1
@@ -358,11 +384,11 @@ function install_dbca() {
 	echo_color info "create database"
 	
 	#write at 20191204 wriet, so to do write again
-	echo -e "you can visit \033[1;41;33m`ls -t $ORACLE_BASE/cfgtoollogs/dbca/${DBNAME}/trace.log_* | head -1`\033[0mto known more"
+	echo -e "you can visit \033[1;41;33m`ls -t $ORACLE_BASE/cfgtoollogs/dbca/${DB_NAME}/trace.log_* | head -1`\033[0mto known more"
 
 	ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
 	echo '' > ${BASE_INSTALL_DIR}/dbca.log
-	tail -f ${BASE_INSTALL_DIR}/dbca.log
+	tail -f ${BASE_INSTALL_DIR}/dbca.log &
 	if [[  -z ${NOPDB}  ]]
 	then
 		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca.rsp > ${BASE_INSTALL_DIR}/dbca.log
@@ -422,14 +448,15 @@ function isntall_post() {
         grep "linesize" ${ORACLE_HOME}/sqlplus/admin/glogin.sql >/dev/null 2>&1  || echo -e '''set linesize 100 pagesize 50''' >> ${ORACLE_HOME}/sqlplus/admin/glogin.sql
         grep stty ~/.bash_profile >/dev/null 2>&1 || echo "stty erase ^H" >> ~/.bash_profile
 
-	$ORACLE_HOME/bin/sqlplus / as sysdba <<EOF >> ${BASE_INSTALL_DIR}/sqlplus_set_default.log
+	$ORACLE_HOME/bin/sqlplus / as sysdba << EOF >> ${BASE_INSTALL_DIR}/sqlplus_set_parameters.log
 ALTER PROFILE default LIMIT PASSWORD_LIFE_TIME UNLIMITED;
-EOF	
-	[[ -z ${NOPDB} ]] && $ORACLE_HOME/bin/sqlplus / as sysdba <<EOF >> ${BASE_INSTALL_DIR}/sqlplus_set_default.log
+EOF
+
+	[[ -z ${NOPDB} ]] && $ORACLE_HOME/bin/sqlplus / as sysdba << EOF  >> ${BASE_INSTALL_DIR}/sqlplus_set_parameters.log
 alter pluggable database ${pdbName} save state;
 alter session set container=${pdbName};
 ALTER PROFILE default LIMIT PASSWORD_LIFE_TIME UNLIMITED;
-EOF   
+EOF
 }
 
 #help this script
@@ -437,7 +464,7 @@ function help_this_script() {
 	echo_color info "you can visit https://github.com/ddcw/ddcw to known more"
 	echo_color red  "------------------------sh ${thisript} [PARAMETER=VALUE] ...------------------------"
 	echo_color red "------------------------CURRENT VALUES ------------------------"
-	need_print_value="DBNAME gdbName pdbName ORACLE_SID ORACLE_HOME ORACLE_BASE INVENTORY_LOCATION_DIR ORACLE_SOFTWARE_NAME ORADATA characterSet open_cursors processes pga_aggregate_target sga_target LISTENER_PORT EMPORT sysPassword systemPassword pdbAdminPassword "
+	need_print_value="DB_NAME gdbName pdbName ORACLE_SID ORACLE_HOME ORACLE_BASE INVENTORY_LOCATION_DIR ORACLE_SOFTWARE_NAME ORADATA characterSet open_cursors processes PGA_AGGREGATE_TARGET SGA_TARGET LISTENER_PORT EMPORT sysPassword systemPassword pdbAdminPassword "
 	for i in ${need_print_value}
 	do
 		eval echo "$i=\$$i"
@@ -461,8 +488,8 @@ function configUSERset() {
 			pdbName|pdbname|PDBNAME|PdbName)
 				export pdbName=${value}
 				;;
-			DBNAME|dbname|dbName|DBname)
-				export DBNAME=${value}
+			DB_NAME|dbname|dbName|DBname)
+				export DB_NAME=${value}
 				;;
 			DB_UNIQUE_NAME)
 				export DB_UNIQUE_NAME=${value}
@@ -479,11 +506,11 @@ function configUSERset() {
 			gdbName|gdbname|GDBNAME|GloableName|GLOABLENAME|gloablename)
 				export gdbName=${value}
 				;;
-			pga_aggregate_target|PGA|pga)
-				export pga_aggregate_target=%${value}
+			pga_aggregate_target|PGA|pga|PGA_AGGREGATE_TARGET)
+				export PGA_AGGREGATE_TARGET=%${value}
 				;;
-			sga_target|sga|SGA)
-				export sga_target=${value}
+			sga_target|sga|SGA|SGA_TARGET)
+				export SGA_TARGET=${value}
 				;;
 			sysPassword|syspassword|SYSPASSWORD|sys|SYS|sysPW|SYSPW)
 				export sysPassword=${value}
@@ -532,6 +559,12 @@ function configUSERset() {
 			NOPDB)
 				export NOPDB=${value}
 				;;
+			ORACLE_HOME)
+				export ORACLE_HOME=${value}
+				;;
+			ORACLE_BASE)
+				export ORACLE_BASE=${value}
+				;;
 			*)
 				export HELP_FLAG=1
 				;;
@@ -542,7 +575,7 @@ function configUSERset() {
 #to judge rootpassword
 function judge_rootpassword() {
 	su_command "touch /tmp/.flag_rootpassword_${begintime}"	
-	[[ -f ${/tmp/.flag_rootpassword_${begintime}} ]] || exits "rootpassword is wrong"
+	[[ -f /tmp/.flag_rootpassword_${begintime} ]] || exits "root password is wrong"
 }
 
 #this is main,ko no DIO da
@@ -565,6 +598,12 @@ function main_() {
 	install_dbca
 	
 	isntall_post
-	
+
+	endtime=`date +%s`
+	costm=`echo ${begintime} ${endtime} | awk '{print ($2-$1)/60}'`
+	echo_color info "\nsysPassword=${sysPassword}"
+	echo_color info "systemPassword=${systemPassword}"
+	echo_color info "pdbAdminPassword=${pdbAdminPassword}\n"
+	echo -e "\n\033[1;41;33m `date +%Y%m%d-%H:%M:%S` cost ${costm} minutes\033[0m"
 }
 main_
