@@ -347,7 +347,7 @@ EOF
 
 #install oracle software only
 function install_db_software() {
-	echo_color info "install db software"
+	echo_color info "install db software...."
 	begintime_dbinstall=$(date +%s)
 	#this is 12.2 version,now 19c has BUG
 	#ps -ef | grep "${BASE_INSTALL_DIR}/db_install.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
@@ -381,8 +381,8 @@ function install_db_software() {
 	$ORACLE_HOME/runInstaller  -ignorePrereq  -silent -noconfig -force -responseFile  ${BASE_INSTALL_DIR}/db_install.rsp
         echo_color info "oracle software install finish."
         echo '' > ${ASROOT_RUN}
-        echo "cp ${ORACLE_BASE}/oraInventory/orainstRoot.sh ${ORACLE_BASE}/oraInventory/orainstRoot.sh.bak${dt}" >> ${ASROOT_RUN}
-        echo "sh ${ORACLE_BASE}/oraInventory/orainstRoot.sh" >> ${ASROOT_RUN}
+        echo "cp ${INVENTORY_LOCATION_DIR}/orainstRoot.sh ${INVENTORY_LOCATION_DIR}/orainstRoot.sh.bak${dt}" >> ${ASROOT_RUN}
+        echo "sh ${INVENTORY_LOCATION_DIR}/orainstRoot.sh" >> ${ASROOT_RUN}
         echo "cp ${ORACLE_HOME}/root.sh ${ORACLE_HOME}/root.sh.bak${dt}" >> ${ASROOT_RUN}
         echo "sh ${ORACLE_HOME}/root.sh" >> ${ASROOT_RUN}
         if [[ -z ${rootpassword} ]]
@@ -405,14 +405,13 @@ function install_netca() {
 
 #install dbca
 function install_dbca() {
-	echo_color info "create database"
+	echo_color info "create database...."
 	begintime_dbca=$(date +%s})
 
 	#write at 20191204 wriet, so to do write again
 	#echo -e "you can visit \033[1;41;33m`ls -t $ORACLE_BASE/cfgtoollogs/dbca/${DB_NAME}/trace.log_* | grep -v '.lck'`\033[0mto known more"
 	
-	dbca_tracelog=$(ls -t $ORACLE_BASE/cfgtoollogs/dbca/${DB_NAME}/trace.log_* | grep -v ".lck")
-	echo_color info "you can visit ${dbca_tracelog}"
+	sleep 10 && echo_color info "you can visit $(ls -t $ORACLE_BASE/cfgtoollogs/dbca/${DB_NAME}/trace.log_* | grep -v '.lck')" &
 
 	#ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
 	#echo '' > ${BASE_INSTALL_DIR}/dbca.log
@@ -430,7 +429,7 @@ function install_dbca() {
 
 #install post, clear, start_stop,backup
 function set_clearFS() {
-	echo "to be continued"
+	echo "set_clearFS to be continued"
 }
 
 function set_start_stop() {
