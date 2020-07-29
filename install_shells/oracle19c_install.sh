@@ -418,9 +418,9 @@ function install_dbca() {
 	#tail -f ${BASE_INSTALL_DIR}/dbca.log &
 	if [[  -z ${NOPDB}  ]]
 	then
-		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca.rsp > ${BASE_INSTALL_DIR}/dbca.log
+		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca.rsp #> ${BASE_INSTALL_DIR}/dbca.log
 	else
-		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca_NOPDB.rsp > ${BASE_INSTALL_DIR}/dbca.log
+		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca_NOPDB.rsp #> ${BASE_INSTALL_DIR}/dbca.log
 	fi
 	#ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
         endtime_dbca=$(date +%s)
