@@ -116,6 +116,8 @@ function init_parameter() {
 	#sga_size MB
 	export SGA_TARGET=$(cat /proc/meminfo | grep MemTotal | awk '{print $2/1024/5*2/4*3}' | awk -F . '{print $1}')
 
+	#mi ma shu ru zui da ci shu
+	export mimacishu_max=3
 }
 
 #check env for install oracle, such as space,kernel params,software....
@@ -333,7 +335,7 @@ characterSet=${characterSet}
 nationalCharacterSet=AL16UTF16
 registerWithDirService=false
 listeners=${LISTENER_NAMES}
-variables=ORACLE_BASE_HOME=${ORACLE_HOME},DB_UNIQUE_NAME=${DB_UNIQUE_NAME},ORACLE_BASE=${ORACLE_BASE},PDB_NAME=,DB_NAME=${DB_NAME},ORACLE_HOME=${ORACLE_HOME},SID=${ORACLE_SID}
+variables=ORACLE_BASE_HOME=${ORACLE_HOME},DB_UNIQUE_NAME=${DB_UNIQUE_NAME},ORACLE_BASE=${ORACLE_BASE},PDB_NAME=${pdbName},DB_NAME=${DB_NAME},ORACLE_HOME=${ORACLE_HOME},SID=${ORACLE_SID}
 initParams=undo_tablespace=UNDOTBS1,enable_pluggable_database=true,sga_target=${SGA_TARGET}MB,db_block_size=8192BYTES,nls_language=AMERICAN,dispatchers=(PROTOCOL=TCP) (SERVICE=${ORACLE_SID}XDB),diagnostic_dest={ORACLE_BASE},control_files=("${ORADATA}/{DB_UNIQUE_NAME}/control01.ctl", "${ORADATA}/{DB_UNIQUE_NAME}/control02.ctl"),remote_login_passwordfile=EXCLUSIVE,audit_file_dest={ORACLE_BASE}/admin/{DB_UNIQUE_NAME}/adump,processes=${processes},pga_aggregate_target=${PGA_AGGREGATE_TARGET}MB,nls_territory=AMERICA,local_listener=LISTENER_${ORACLE_SID},open_cursors=${open_cursors},compatible=19.0.0,db_name=${DB_NAME},audit_trail=none
 sampleSchema=false
 memoryPercentage=40
@@ -346,6 +348,7 @@ EOF
 #install oracle software only
 function install_db_software() {
 	echo_color info "install db software"
+	begintime_dbinstall=$(date +%s)
 	#this is 12.2 version,now 19c has BUG
 	#ps -ef | grep "${BASE_INSTALL_DIR}/db_install.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
 	#echo '' > ${BASE_INSTALL_DIR}/db_install.log
@@ -389,6 +392,8 @@ function install_db_software() {
                 su_command "sh ${ASROOT_RUN}"
 		echo_color "run orainstRoot.sh and root.sh auto finishd"
         fi
+        endtime_dbinstall=$(date +%s)
+        costm_dbinstall=`echo ${begintime_dbinstall} ${endtime_dbinstall} | awk '{print ($2-$1)/60}'`
 
 }
 
@@ -401,20 +406,26 @@ function install_netca() {
 #install dbca
 function install_dbca() {
 	echo_color info "create database"
-	
-	#write at 20191204 wriet, so to do write again
-	echo -e "you can visit \033[1;41;33m`ls -t $ORACLE_BASE/cfgtoollogs/dbca/${DB_NAME}/trace.log_* | grep -v '.lck'`\033[0mto known more"
+	begintime_dbca=$(date +%s})
 
-	ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
-	echo '' > ${BASE_INSTALL_DIR}/dbca.log
-	tail -f ${BASE_INSTALL_DIR}/dbca.log &
+	#write at 20191204 wriet, so to do write again
+	#echo -e "you can visit \033[1;41;33m`ls -t $ORACLE_BASE/cfgtoollogs/dbca/${DB_NAME}/trace.log_* | grep -v '.lck'`\033[0mto known more"
+	
+	dbca_tracelog=$(ls -t $ORACLE_BASE/cfgtoollogs/dbca/${DB_NAME}/trace.log_* | grep -v ".lck")
+	echo_color info "you can visit ${dbca_tracelog}"
+
+	#ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
+	#echo '' > ${BASE_INSTALL_DIR}/dbca.log
+	#tail -f ${BASE_INSTALL_DIR}/dbca.log &
 	if [[  -z ${NOPDB}  ]]
 	then
 		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca.rsp > ${BASE_INSTALL_DIR}/dbca.log
 	else
 		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca_NOPDB.rsp > ${BASE_INSTALL_DIR}/dbca.log
 	fi
-	ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
+	#ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
+        endtime_dbca=$(date +%s)
+        costm_dbca=`echo ${begintime_dbca} ${endtime_dbca} | awk '{print ($2-$1)/60}'`
 }
 
 #install post, clear, start_stop,backup
@@ -471,7 +482,7 @@ function isntall_post() {
 ALTER PROFILE default LIMIT PASSWORD_LIFE_TIME UNLIMITED;
 EOF
 
-	[[ -z ${NOPDB} ]] && $ORACLE_HOME/bin/sqlplus / as sysdba << EOF  >> ${BASE_INSTALL_DIR}/sqlplus_set_parameters.log
+	[[  -z ${NOPDB} ]] &&  $ORACLE_HOME/bin/sqlplus / as sysdba << EOF  >> ${BASE_INSTALL_DIR}/sqlplus_set_parameters.log
 alter pluggable database ${pdbName} save state;
 alter session set container=${pdbName};
 ALTER PROFILE default LIMIT PASSWORD_LIFE_TIME UNLIMITED;
@@ -584,6 +595,10 @@ function configUSERset() {
 			ORACLE_BASE)
 				export ORACLE_BASE=${value}
 				;;
+			SE_ROOT_PASSWORD)
+				#when SE_ROOT_PASSWORD=ANY_KEY, you should input rootpassword when script run.
+				export SE_ROOT_PASSWORD=${value}
+				;;
 			*)
 				export HELP_FLAG=1
 				;;
@@ -603,6 +618,22 @@ function main_() {
 	configUSERset
 	[[ -z ${HELP_FLAG} ]] || help_this_script
 	[[ -z ${rootpassword} ]] || judge_rootpassword
+
+	mimacishu_current=0
+	while [[ ! -z ${SE_ROOT_PASSWORD} ]] && [ ${mimacishu_current} -lt ${mimacishu_max} ]
+	do
+		read -t 60 -p "please input root password:" rootpasswords
+		export rootpassword=${rootpasswords}
+		if [[ ! -z ${rootpassword} ]] 
+		then
+			su_command "touch /tmp/.flag_rootpassword_${begintime}"
+			[[ -f /tmp/.flag_rootpassword_${begintime} ]] && break
+			echo_color warn "password is wrong"
+		fi
+		mimacishu_current=$[ ${mimacishu_current} + 1 ]
+	done
+
+
 	mkdir_authorization
 	[[ ${IGNORE_PACK} -eq 1 ]] ||  check_PACK
 	check_env
@@ -620,9 +651,12 @@ function main_() {
 
 	endtime=`date +%s`
 	costm=`echo ${begintime} ${endtime} | awk '{print ($2-$1)/60}'`
-	echo_color info "\nsysPassword=${sysPassword}"
+	echo ""
+	echo_color info "sysPassword=${sysPassword}"
 	echo_color info "systemPassword=${systemPassword}"
 	echo_color info "pdbAdminPassword=${pdbAdminPassword}\n"
-	echo -e "\n\033[1;41;33m `date +%Y%m%d-%H:%M:%S` cost ${costm} minutes\033[0m"
+	echo_color info "dbinstall cost: ${costm_dbinstall}"
+	echo_color info "dbca cost: ${costm_dbca}"
+	echo -e "\n\033[1;41;33m `date +%Y%m%d-%H:%M:%S`TOTAL COST ${costm} minutes\033[0m"
 }
 main_
