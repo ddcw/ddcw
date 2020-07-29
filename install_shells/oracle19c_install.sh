@@ -6,6 +6,7 @@
 
 #change log
 #2020728 add main,zhu yao gong neng dou shi jin tian xie da. sai guo li hai tie ya zi da.
+#20200729 add install_soft netca dbca and other.
 
 #this script support LANG=en_US.UTF-8 only.
 export LANG=en_US.UTF-8
