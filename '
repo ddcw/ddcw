@@ -55,23 +55,6 @@ function echo_color() {
   esac
 }
 
-function su_command(){
-	rpm -q expect >/dev/null 2>&1 || exits "this OS has not expect, so rootpassword is invalid"
-        user=root
-        commd=$1
-        password=${rootpassword}
-        expect << EOF
-        set timeout 30
-        spawn su ${user} -c "${commd}"
-        expect {
-                        "(yes/no" {send "yes\r";exp_continue}
-                        "assword:" {send "${password}\r"}
-        }
-        expect "${user}@*" {send "exit\r"}
-        expect eof
-EOF
-}
-
 #bak file function, bak_file FILENAME but abandonmented
 function bak_file() {
   [ -d ~/bak_file ] || mkdir ~/bak_file
@@ -319,32 +302,7 @@ EOF
 #install oracle software only
 function install_db_software() {
 	echo_color info "install db software"
-	ps -ef | grep "${BASE_INSTALL_DIR}/db_install.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
-	echo '' > ${BASE_INSTALL_DIR}/db_install.log
-	tail -f ${BASE_INSTALL_DIR}/db_install.log
 	$ORACLE_HOME/runInstaller  -silent -ignoreSysPrereqs  -ignorePrereq  -showProgress -responseFile  ${BASE_INSTALL_DIR}/db_install.rsp >${BASE_INSTALL_DIR}/db_install.log
-	while true
-	do
-		if grep "Successfully Setup Software" ${BASE_INSTALL_DIR}/db_install.log >/dev/null 2>&1
-		then
-			echo_color info "oracle software install finish."
-			echo '' > ${ASROOT_RUN}
-			echo "cp ${ORACLE_BASE}/oraInventory/orainstRoot.sh ${ORACLE_BASE}/oraInventory/orainstRoot.sh.bak${dt}" >> ${ASROOT_RUN}
-			echo "sh ${ORACLE_BASE}/oraInventory/orainstRoot.sh" >> ${ASROOT_RUN}
-			echo "cp ${ORACLE_HOME}/root.sh ${ORACLE_HOME}/root.sh.bak${dt}" >> ${ASROOT_RUN}
-			echo "sh ${ORACLE_HOME}/root.sh" >> ${ASROOT_RUN}
-			if [[ -z ${rootpassword} ]]
-			then
-				echo_color warn "you should run script as root\n${ORACLE_BASE}/oraInventory/orainstRoot.sh\n${ORACLE_HOME}/root.sh. you can run like ${ASROOT_RUN}"
-			else
-				su_command "sh ${ASROOT_RUN}"
-			fi
-			break
-		else
-			sleep 10
-		fi
-	done
-	ps -ef | grep "${BASE_INSTALL_DIR}/db_install.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
 }
 
 #install netca
@@ -356,20 +314,12 @@ function install_netca() {
 #install dbca
 function install_dbca() {
 	echo_color info "create database"
-	
-	#write at 20191204 wriet, so to do write again
-	echo -e "you can visit \033[1;41;33m`ls -t $ORACLE_BASE/cfgtoollogs/dbca/${DBNAME}/trace.log_* | head -1`\033[0mto known more"
-
-	ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
-	echo '' > ${BASE_INSTALL_DIR}/dbca.log
-	tail -f ${BASE_INSTALL_DIR}/dbca.log
 	if [[  -z ${NOPDB}  ]]
 	then
 		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca.rsp > ${BASE_INSTALL_DIR}/dbca.log
 	else
 		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca_NOPDB.rsp > ${BASE_INSTALL_DIR}/dbca.log
 	fi
-	ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
 }
 
 #install post, clear, start_stop,backup
@@ -416,20 +366,10 @@ function isntall_post() {
 	set_clearFS
 	set_start_stop
 	set_Backup
-
         grep "define" ${ORACLE_HOME}/sqlplus/admin/glogin.sql >/dev/null 2>&1  || echo -e "define _editor='vi'" >> ${ORACLE_HOME}/sqlplus/admin/glogin.sql
         grep "sqlprompt" ${ORACLE_HOME}/sqlplus/admin/glogin.sql >/dev/null 2>&1 || echo  set sqlprompt "_user'@'_connect_identifier> " >> ${ORACLE_HOME}/sqlplus/admin/glogin.sql
         grep "linesize" ${ORACLE_HOME}/sqlplus/admin/glogin.sql >/dev/null 2>&1  || echo -e '''set linesize 100 pagesize 50''' >> ${ORACLE_HOME}/sqlplus/admin/glogin.sql
         grep stty ~/.bash_profile >/dev/null 2>&1 || echo "stty erase ^H" >> ~/.bash_profile
-
-	$ORACLE_HOME/bin/sqlplus / as sysdba <<EOF >> ${BASE_INSTALL_DIR}/sqlplus_set_default.log
-ALTER PROFILE default LIMIT PASSWORD_LIFE_TIME UNLIMITED;
-EOF	
-	[[ -z ${NOPDB} ]] && $ORACLE_HOME/bin/sqlplus / as sysdba <<EOF >> ${BASE_INSTALL_DIR}/sqlplus_set_default.log
-alter pluggable database ${pdbName} save state;
-alter session set container=${pdbName};
-ALTER PROFILE default LIMIT PASSWORD_LIFE_TIME UNLIMITED;
-EOF   
 }
 
 #help this script
@@ -541,8 +481,7 @@ function configUSERset() {
 
 #to judge rootpassword
 function judge_rootpassword() {
-	su_command "touch /tmp/.flag_rootpassword_${begintime}"	
-	[[ -f ${/tmp/.flag_rootpassword_${begintime}} ]] || exits "rootpassword is wrong"
+	
 }
 
 #this is main,ko no DIO da
