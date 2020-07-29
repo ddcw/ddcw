@@ -90,7 +90,8 @@ function init_parameter() {
 	export  INVENTORY_LOCATION_DIR=${ORACLE_BASE%/*}/oraInventory
 	export  LISTENER_NAMES="LISTENER"
 	export  LISTENER_PORT=1521
-	export  ORACLE_SID=$(hostname)
+	export  ORACLE_SID=$(env | grep ORACLE_SID= | awk -F 'ORACLE_SID=' '{print $2}')
+	[[ -z ${ORACLE_SID} ]] && export ORACLE_SID=$(hostname)
 	export  DB_UNIQUE_NAME=${ORACLE_SID}
 	export  DB_NAME=${ORACLE_SID}
 	export  gdbName=${DB_NAME}
@@ -345,32 +346,50 @@ EOF
 #install oracle software only
 function install_db_software() {
 	echo_color info "install db software"
-	ps -ef | grep "${BASE_INSTALL_DIR}/db_install.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
-	echo '' > ${BASE_INSTALL_DIR}/db_install.log
-	tail -f ${BASE_INSTALL_DIR}/db_install.log &
-	$ORACLE_HOME/runInstaller  -ignorePrereq  -silent -noconfig -force -responseFile  ${BASE_INSTALL_DIR}/db_install.rsp >${BASE_INSTALL_DIR}/db_install.log
-	while true
-	do
-		if grep "Successfully Setup Software" ${BASE_INSTALL_DIR}/db_install.log >/dev/null 2>&1
-		then
-			echo_color info "oracle software install finish."
-			echo '' > ${ASROOT_RUN}
-			echo "cp ${ORACLE_BASE}/oraInventory/orainstRoot.sh ${ORACLE_BASE}/oraInventory/orainstRoot.sh.bak${dt}" >> ${ASROOT_RUN}
-			echo "sh ${ORACLE_BASE}/oraInventory/orainstRoot.sh" >> ${ASROOT_RUN}
-			echo "cp ${ORACLE_HOME}/root.sh ${ORACLE_HOME}/root.sh.bak${dt}" >> ${ASROOT_RUN}
-			echo "sh ${ORACLE_HOME}/root.sh" >> ${ASROOT_RUN}
-			if [[ -z ${rootpassword} ]]
-			then
-				echo_color warn "you should run script as root\n${ORACLE_BASE}/oraInventory/orainstRoot.sh\n${ORACLE_HOME}/root.sh. you can run like ${ASROOT_RUN}"
-			else
-				su_command "sh ${ASROOT_RUN}"
-			fi
-			break
-		else
-			sleep 10
-		fi
-	done
-	ps -ef | grep "${BASE_INSTALL_DIR}/db_install.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
+	#this is 12.2 version,now 19c has BUG
+	#ps -ef | grep "${BASE_INSTALL_DIR}/db_install.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
+	#echo '' > ${BASE_INSTALL_DIR}/db_install.log
+	#tail -f ${BASE_INSTALL_DIR}/db_install.log &
+	#$ORACLE_HOME/runInstaller  -ignorePrereq  -silent -noconfig -force -responseFile  ${BASE_INSTALL_DIR}/db_install.rsp >${BASE_INSTALL_DIR}/db_install.log
+	#while true
+	#do
+	#	if grep "Successfully Setup Software" ${BASE_INSTALL_DIR}/db_install.log >/dev/null 2>&1
+	#	then
+	#		echo_color info "oracle software install finish."
+	#		echo '' > ${ASROOT_RUN}
+	#		echo "cp ${ORACLE_BASE}/oraInventory/orainstRoot.sh ${ORACLE_BASE}/oraInventory/orainstRoot.sh.bak${dt}" >> ${ASROOT_RUN}
+	#		echo "sh ${ORACLE_BASE}/oraInventory/orainstRoot.sh" >> ${ASROOT_RUN}
+	#		echo "cp ${ORACLE_HOME}/root.sh ${ORACLE_HOME}/root.sh.bak${dt}" >> ${ASROOT_RUN}
+	#		echo "sh ${ORACLE_HOME}/root.sh" >> ${ASROOT_RUN}
+	#		if [[ -z ${rootpassword} ]]
+	#		then
+	#			echo_color warn "you should run script as root\n${ORACLE_BASE}/oraInventory/orainstRoot.sh\n${ORACLE_HOME}/root.sh. you can run like ${ASROOT_RUN}"
+	#		else
+	#			su_command "sh ${ASROOT_RUN}"
+	#		fi
+	#		break
+	#	else
+	#		sleep 10
+	#	fi
+	#done
+	#ps -ef | grep "${BASE_INSTALL_DIR}/db_install.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
+
+	#19c install software.
+	$ORACLE_HOME/runInstaller  -ignorePrereq  -silent -noconfig -force -responseFile  ${BASE_INSTALL_DIR}/db_install.rsp
+        echo_color info "oracle software install finish."
+        echo '' > ${ASROOT_RUN}
+        echo "cp ${ORACLE_BASE}/oraInventory/orainstRoot.sh ${ORACLE_BASE}/oraInventory/orainstRoot.sh.bak${dt}" >> ${ASROOT_RUN}
+        echo "sh ${ORACLE_BASE}/oraInventory/orainstRoot.sh" >> ${ASROOT_RUN}
+        echo "cp ${ORACLE_HOME}/root.sh ${ORACLE_HOME}/root.sh.bak${dt}" >> ${ASROOT_RUN}
+        echo "sh ${ORACLE_HOME}/root.sh" >> ${ASROOT_RUN}
+        if [[ -z ${rootpassword} ]]
+        then
+                echo_color warn "you should run script as root\n${ORACLE_BASE}/oraInventory/orainstRoot.sh\n${ORACLE_HOME}/root.sh. you can run like ${ASROOT_RUN}"
+        else
+                su_command "sh ${ASROOT_RUN}"
+		echo_color "run orainstRoot.sh and root.sh auto finishd"
+        fi
+
 }
 
 #install netca
