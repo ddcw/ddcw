@@ -228,7 +228,6 @@ oracle.install.db.OSBACKUPDBA_GROUP=backupdba
 oracle.install.db.OSDGDBA_GROUP=dgdba
 oracle.install.db.OSKMDBA_GROUP=kmdba
 oracle.install.db.OSRACDBA_GROUP=racdba
-oracle.install.db.rootconfig.executeRootScript=true
 oracle.install.db.config.starterdb.type=GENERAL_PURPOSE
 oracle.install.db.ConfigureAsContainerDB=false
 oracle.install.db.config.starterdb.memoryOption=false
@@ -384,7 +383,7 @@ function install_dbca() {
 	echo_color info "create database"
 	
 	#write at 20191204 wriet, so to do write again
-	echo -e "you can visit \033[1;41;33m`ls -t $ORACLE_BASE/cfgtoollogs/dbca/${DB_NAME}/trace.log_* | head -1`\033[0mto known more"
+	echo -e "you can visit \033[1;41;33m`ls -t $ORACLE_BASE/cfgtoollogs/dbca/${DB_NAME}/trace.log_* | grep -v '.lck'`\033[0mto known more"
 
 	ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
 	echo '' > ${BASE_INSTALL_DIR}/dbca.log
