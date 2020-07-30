@@ -211,7 +211,7 @@ function check_PACK() {
 		return 0
 	else
 		echo_color warn "${noinstall_pack} is not install , you should install then and run again , or use IGNORE_PACK=1 to force run script"
-		[[ -z ${rootpassword} ]] || su_command "yum -y install ${noinstall_pack}" || return 1
+		[[ -z ${rootpassword} ]] || su_command "yum -y install ${noinstall_pack}" || exits "this OS has not YUM"
 	fi
 }
 
