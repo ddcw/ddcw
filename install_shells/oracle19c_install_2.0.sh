@@ -7,6 +7,7 @@
 #change log
 #2020728 add main,zhu yao gong neng dou shi jin tian xie da. sai guo li hai tie ya zi da.
 #20200729 add install_soft netca dbca and other.
+#20200730 script instead of DBCA by ddcw.
 
 #this script support LANG=en_US.UTF-8 only.
 export LANG=en_US.UTF-8
@@ -411,22 +412,293 @@ function install_dbca() {
 	#write at 20191204 wriet, so to do write again
 	#echo -e "you can visit \033[1;41;33m`ls -t $ORACLE_BASE/cfgtoollogs/dbca/${DB_NAME}/trace.log_* | grep -v '.lck'`\033[0mto known more"
 	
-	echo_color info "you can visit  $ORACLE_BASE/cfgtoollogs/dbca/${DB_NAME}/trace.log_* " 
+	#echo_color info "you can visit  $ORACLE_BASE/cfgtoollogs/dbca/${DB_NAME}/trace.log_* " 
 
 	#ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
 	#echo '' > ${BASE_INSTALL_DIR}/dbca.log
 	#tail -f ${BASE_INSTALL_DIR}/dbca.log &
-	if [[  -z ${NOPDB}  ]]
-	then
-		echo_color info "pdbname: ${pdbName}"
-		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca.rsp #> ${BASE_INSTALL_DIR}/dbca.log
-	else
-		echo_color info "you chose NOPDB"
-		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca_NOPDB.rsp #> ${BASE_INSTALL_DIR}/dbca.log
-	fi
+	#if [[  -z ${NOPDB}  ]]
+	#then
+	#	echo_color info "pdbname: ${pdbName}"
+	#	${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca.rsp #> ${BASE_INSTALL_DIR}/dbca.log
+	#else
+	#	echo_color info "you chose NOPDB"
+	#	${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca_NOPDB.rsp #> ${BASE_INSTALL_DIR}/dbca.log
+	#fi
 	#ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
+
+	${scripts_dir}/${ORACLE_SID}.sh > ${BASE_INSTALL_DIR}/dbca.log 2>&1
+	sleep 80
+	grep -v "#" /etc/oratab | grep ORACLE_HOME:  >/dev/null 2>&1 || echo "${ORACLE_SID}:$ORACLE_HOME:Y" >> /etc/oratab
+
+
         endtime_dbca=$(date +%s)
         costm_dbca=`echo ${begintime_dbca} ${endtime_dbca} | awk '{print ($2-$1)/60}'`
+}
+
+function init_dbca_script() {
+	#make directory for script 
+	mkdir -p ${ORACLE_BASE}/admin/${DBNAME}/scripts || exits " mkdir -p ${ORACLE_BASE}/admin/${DBNAME}/scripts FAILED"
+	export scripts_dir="${ORACLE_BASE}/admin/${DBNAME}/scripts"
+	
+	#DBNAME=DB_NAME, mei de ban fa, zhe shi fu zhi shang yi ge jiao ben de, wo ye nan de qu gai le. he he da.
+	export DBNAME=${DB_NAME}
+
+	cat << EOF > ${scripts_dir}/${ORACLE_SID}.sh
+#!/bin/sh
+
+OLD_UMASK=\`umask\`
+umask 0027
+mkdir -p $ORACLE_BASE
+mkdir -p $ORACLE_BASE/admin/${DBNAME}/adump
+mkdir -p $ORACLE_BASE/admin/${DBNAME}/dpdump
+mkdir -p $ORACLE_BASE/admin/${DBNAME}/pfile
+mkdir -p $ORACLE_BASE/cfgtoollogs/dbca/${DBNAME}
+mkdir -p $ORACLE_BASE/audit
+mkdir -p $ORADATA
+mkdir -p $ORACLE_HOME/dbs
+umask \${OLD_UMASK}
+PERL5LIB=\$ORACLE_HOME/rdbms/admin:\$PERL5LIB; export PERL5LIB
+ORACLE_SID=$ORACLE_SID; export ORACLE_SID
+PATH=\$ORACLE_HOME/bin:\$ORACLE_HOME/perl/bin:\$PATH; export PATH
+echo You should Add this entry in the /etc/oratab: ${ORACLE_SID}:$ORACLE_HOME:Y
+$ORACLE_HOME/bin/sqlplus /nolog  @$ORACLE_BASE/admin/${DBNAME}/scripts/${ORACLE_SID}.sql
+EOF
+	chmod +x ${scripts_dir}/${ORACLE_SID}.sh
+
+	cat << EOF > ${scripts_dir}/${ORACLE_SID}.sql
+set verify off
+define sysPassword=${sysPassword}
+define systemPassword=${systemPassword}
+define pdbAdminPassword=${pdbAdminPassword}
+host $ORACLE_HOME/bin/orapwd file=$ORACLE_HOME/dbs/orapw${ORACLE_SID} password=${sysPassword} force=y format=12
+@$ORACLE_BASE/admin/${DBNAME}/scripts/CreateDB.sql
+@$ORACLE_BASE/admin/${DBNAME}/scripts/CreateDBFiles.sql
+@$ORACLE_BASE/admin/${DBNAME}/scripts/CreateDBCatalog.sql
+@$ORACLE_BASE/admin/${DBNAME}/scripts/context.sql
+@$ORACLE_BASE/admin/${DBNAME}/scripts/CreateClustDBViews.sql
+@$ORACLE_BASE/admin/${DBNAME}/scripts/lockAccount.sql
+@$ORACLE_BASE/admin/${DBNAME}/scripts/postDBCreation.sql
+@$ORACLE_BASE/admin/${DBNAME}/scripts/PDBCreation.sql
+@$ORACLE_BASE/admin/${DBNAME}/scripts/plug_${pdbName}.sql
+@$ORACLE_BASE/admin/${DBNAME}/scripts/postPDBCreation_${pdbName}.sql
+EOF
+	chmod +x ${scripts_dir}/${ORACLE_SID}.sql
+
+	cat << EOF > ${scripts_dir}/CreateDB.sql
+SET VERIFY OFF
+connect \"SYS\"/\"&&sysPassword\" as SYSDBA
+set echo on
+spool $ORACLE_BASE/admin/${DBNAME}/scripts/CreateDB.log append
+startup nomount pfile=\"$ORACLE_BASE/admin/${DBNAME}/scripts/init.ora\";
+CREATE DATABASE \"${DBNAME}\"
+MAXINSTANCES 8
+MAXLOGHISTORY 1
+MAXLOGFILES 16
+MAXLOGMEMBERS 3
+MAXDATAFILES 1024
+DATAFILE SIZE 700M AUTOEXTEND ON NEXT  10240K MAXSIZE UNLIMITED
+EXTENT MANAGEMENT LOCAL
+SYSAUX DATAFILE SIZE 550M AUTOEXTEND ON NEXT  10240K MAXSIZE UNLIMITED
+SMALLFILE DEFAULT TEMPORARY TABLESPACE TEMP TEMPFILE SIZE 20M AUTOEXTEND ON NEXT  640K MAXSIZE UNLIMITED
+SMALLFILE UNDO TABLESPACE \"UNDOTBS1\" DATAFILE SIZE 200M AUTOEXTEND ON NEXT  5120K MAXSIZE UNLIMITED
+CHARACTER SET ${characterSet}
+NATIONAL CHARACTER SET AL16UTF16
+LOGFILE GROUP 1  SIZE 512M,
+GROUP 2  SIZE 512M,
+GROUP 3  SIZE 512M,
+GROUP 4  SIZE 512M
+USER SYS IDENTIFIED BY \"&&sysPassword\" USER SYSTEM IDENTIFIED BY \"&&systemPassword\";
+set linesize 2048;
+column ctl_files NEW_VALUE ctl_files;
+select concat('control_files=''', concat(replace(value, ', ', ''','''), '''')) ctl_files from v\$parameter where name ='control_files';
+host echo &ctl_files >>$ORACLE_BASE/admin/${DBNAME}/scripts/init.ora;
+spool off
+EOF
+
+	cat << EOF > ${scripts_dir}/CreateDBFiles.sql
+SET VERIFY OFF
+connect \"SYS\"/\"&&sysPassword\" as SYSDBA
+set echo on
+spool $ORACLE_BASE/admin/${DBNAME}/scripts/CreateDBFiles.log append
+CREATE SMALLFILE TABLESPACE \"USERS\" LOGGING DATAFILE SIZE 5M AUTOEXTEND ON NEXT  1280K MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL SEGMENT SPACE MANAGEMENT  AUTO;
+ALTER DATABASE DEFAULT TABLESPACE \"USERS\";
+spool off
+EOF
+
+	cat << EOF > ${scripts_dir}/CreateDBCatalog.sql
+SET VERIFY OFF
+connect \"SYS\"/\"&&sysPassword\" as SYSDBA
+set echo on
+spool $ORACLE_BASE/admin/${DBNAME}/scripts/CreateDBCatalog.log append
+alter session set \"_oracle_script\"=true;
+alter pluggable database pdb\$seed close;
+alter pluggable database pdb\$seed open;
+host perl ${ORACLE_HOME}/rdbms/admin/catcon.pl -n 1 -l ${ORACLE_BASE}/admin/${DBNAME}/scripts -v  -b catalog  -U \"SYS\"/\"&&sysPassword\" ${ORACLE_HOME}/rdbms/admin/catalog.sql;
+host perl ${ORACLE_HOME}/rdbms/admin/catcon.pl -n 1 -l ${ORACLE_BASE}/admin/${DBNAME}/scripts -v  -b catproc  -U \"SYS\"/\"&&sysPassword\" ${ORACLE_HOME}/rdbms/admin/catproc.sql;
+host perl ${ORACLE_HOME}/rdbms/admin/catcon.pl -n 1 -l ${ORACLE_BASE}/admin/${DBNAME}/scripts -v  -b catoctk  -U \"SYS\"/\"&&sysPassword\" ${ORACLE_HOME}/rdbms/admin/catoctk.sql;
+host perl ${ORACLE_HOME}/rdbms/admin/catcon.pl -n 1 -l ${ORACLE_BASE}/admin/${DBNAME}/scripts -v  -b owminst  -U \"SYS\"/\"&&sysPassword\" ${ORACLE_HOME}/rdbms/admin/owminst.plb;
+host perl ${ORACLE_HOME}/rdbms/admin/catcon.pl -n 1 -l ${ORACLE_BASE}/admin/${DBNAME}/scripts -v  -b pupbld -u SYSTEM/&&systemPassword  -U \"SYS\"/\"&&sysPassword\" ${ORACLE_HOME}/sqlplus/admin/pupbld.sql;
+connect \"SYSTEM\"/\"&&systemPassword\"
+set echo on
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/sqlPlusHelp.log append
+host perl ${ORACLE_HOME}/rdbms/admin/catcon.pl -n 1 -l ${ORACLE_BASE}/admin/${DBNAME}/scripts -v  -b hlpbld -u SYSTEM/&&systemPassword  -U \"SYS\"/\"&&sysPassword\" -a 1  ${ORACLE_HOME}/sqlplus/admin/help/hlpbld.sql 1helpus.sql;
+spool off
+spool off
+EOF
+	
+	cat << EOF > ${scripts_dir}/context.sql
+SET VERIFY OFF
+connect \"SYS\"/\"&&sysPassword\" as SYSDBA
+set echo on
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/context.log append
+host perl ${ORACLE_HOME}/rdbms/admin/catcon.pl -n 1 -l ${ORACLE_BASE}/admin/${DBNAME}/scripts -v  -b catctx -c  'PDB\$SEED CDB\$ROOT'   -U \"SYS\"/\"&&sysPassword\" -a 1  ${ORACLE_HOME}/ctx/admin/catctx.sql 1Xbkfsdcdf1ggh_123 1SYSAUX 1TEMP 1LOCK;
+alter user CTXSYS account unlock identified by \"CTXSYS\";
+connect \"CTXSYS\"/\"CTXSYS\"
+host perl ${ORACLE_HOME}/rdbms/admin/catcon.pl -n 1 -l ${ORACLE_BASE}/admin/${DBNAME}/scripts -v  -b dr0defin -c  'PDB\$SEED CDB\$ROOT'  -u CTXSYS/CTXSYS  -U \"SYS\"/\"&&sysPassword\" -a 1  ${ORACLE_HOME}/ctx/admin/defaults/dr0defin.sql 1\"AMERICAN\";
+connect \"SYS\"/\"&&sysPassword\" as SYSDBA
+alter user CTXSYS password expire account lock;
+host perl ${ORACLE_HOME}/rdbms/admin/catcon.pl -n 1 -l ${ORACLE_BASE}/admin/${DBNAME}/scripts -v  -b dbmsxdbt -c  'PDB\$SEED CDB\$ROOT'   -U \"SYS\"/\"&&sysPassword\" ${ORACLE_HOME}/rdbms/admin/dbmsxdbt.sql;
+spool off
+EOF
+
+	cat << EOF > ${scripts_dir}/CreateClustDBViews.sql
+SET VERIFY OFF
+connect \"SYS\"/\"&&sysPassword\" as SYSDBA
+set echo on
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/CreateClustDBViews.log append
+host perl ${ORACLE_HOME}/rdbms/admin/catcon.pl -n 1 -l ${ORACLE_BASE}/admin/${DBNAME}/scripts -v  -b catclust  -U \"SYS\"/\"&&sysPassword\" ${ORACLE_HOME}/rdbms/admin/catclust.sql;
+host perl ${ORACLE_HOME}/rdbms/admin/catcon.pl -n 1 -l ${ORACLE_BASE}/admin/${DBNAME}/scripts -v  -b catfinal  -U \"SYS\"/\"&&sysPassword\" ${ORACLE_HOME}/rdbms/admin/catfinal.sql;
+spool off
+connect \"SYS\"/\"&&sysPassword\" as SYSDBA
+set echo on
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/postDBCreation.log append
+create or replace directory ORACLE_HOME as '${ORACLE_HOME}';
+create or replace directory ORACLE_BASE as '/u01/app/oracle';
+grant sysdg to sysdg;
+grant sysbackup to sysbackup;
+grant syskm to syskm;
+EOF
+	cat << EOF > ${scripts_dir}/lockAccount.sql
+SET VERIFY OFF
+connect "SYS"/"&&sysPassword" as SYSDBA
+set echo on
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/lockAccount.log append
+alter session set "_oracle_script"=true;
+alter pluggable database pdb\$seed close;
+alter pluggable database pdb\$seed open;
+BEGIN
+ FOR item IN ( SELECT USERNAME FROM DBA_USERS WHERE ACCOUNT_STATUS IN ('OPEN', 'LOCKED', 'EXPIRED') AND USERNAME NOT IN (
+'SYS','SYSTEM') )
+ LOOP
+  dbms_output.put_line('Locking and Expiring: ' || item.USERNAME);
+  execute immediate 'alter user ' ||
+         sys.dbms_assert.enquote_name(
+         sys.dbms_assert.schema_name(
+         item.USERNAME),false) || ' password expire account lock' ;
+ END LOOP;
+END;
+/
+alter session set container=pdb\$seed;
+BEGIN
+ FOR item IN ( SELECT USERNAME FROM DBA_USERS WHERE ACCOUNT_STATUS IN ('OPEN', 'LOCKED', 'EXPIRED') AND USERNAME NOT IN (
+'SYS','SYSTEM') )
+ LOOP
+  dbms_output.put_line('Locking and Expiring: ' || item.USERNAME);
+  execute immediate 'alter user ' ||
+         sys.dbms_assert.enquote_name(
+         sys.dbms_assert.schema_name(
+         item.USERNAME),false) || ' password expire account lock' ;
+ END LOOP;
+END;
+/
+alter session set container=cdb\$root;
+spool off
+EOF
+
+	cat << EOF > ${scripts_dir}/postDBCreation.sql
+SET VERIFY OFF
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/postDBCreation.log append
+host ${ORACLE_HOME}/OPatch/datapatch -skip_upgrade_check -db ${ORACLE_SID};
+connect "SYS"/"&&sysPassword" as SYSDBA
+set echo on
+create spfile='${ORACLE_HOME}/dbs/spfile${ORACLE_SID}.ora' FROM pfile='${ORACLE_BASE}/admin/${DBNAME}/scripts/init.ora';
+connect "SYS"/"&&sysPassword" as SYSDBA
+host perl ${ORACLE_HOME}/rdbms/admin/catcon.pl -n 1 -l ${ORACLE_BASE}/admin/${DBNAME}/scripts -v  -b utlrp  -U "SYS"/"&&sysPassword" ${ORACLE_HOME}/rdbms/admin/utlrp.sql;
+select comp_id, status from dba_registry;
+shutdown immediate;
+connect "SYS"/"&&sysPassword" as SYSDBA
+startup ;
+spool off
+EOF
+
+	cat << EOF > ${scripts_dir}/PDBCreation.sql
+SET VERIFY OFF
+set echo on
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/PDBCreation.log append
+EOF
+
+	cat << EOF > ${scripts_dir}/plug_${pdbName}.sql
+SET VERIFY OFF
+connect "SYS"/"&&sysPassword" as SYSDBA
+set echo on
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/plugDatabase.log append
+select  'database_running' from dual;
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/plugDatabase.log append
+startup ;
+CREATE PLUGGABLE DATABASE ${pdbName} ADMIN USER PDBADMIN IDENTIFIED BY "${pdbAdminPassword}" ROLES=(CONNECT)  file_name_convert=NONE  STORAGE ( MAXSIZE UNLIMITED MAX_SHARED_TEMP_SIZE UNLIMITED);
+alter pluggable database ${pdbName} open;
+alter system register;
+EOF
+
+	cat << EOF > ${scripts_dir}/postPDBCreation_${pdbName}.sql
+SET VERIFY OFF
+connect "SYS"/"&&sysPassword" as SYSDBA
+alter session set container=${pdbName};
+set echo on
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/postPDBCreation.log append
+CREATE SMALLFILE TABLESPACE "USERS" LOGGING  DATAFILE  SIZE 5M AUTOEXTEND ON NEXT  1280K MAXSIZE UNLIMITED  EXTENT MANAGEMENT LOCAL  SEGMENT SPACE MANAGEMENT  AUTO;
+ALTER DATABASE DEFAULT TABLESPACE "USERS";
+connect ""/"" as SYSDBA
+select property_value from database_properties where property_name='LOCAL_UNDO_ENABLED';
+connect "SYS"/"&&sysPassword" as SYSDBA
+alter session set container=${pdbName};
+set echo on
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/postPDBCreation.log append
+connect "SYS"/"&&sysPassword" as SYSDBA
+alter session set container=${pdbName};
+set echo on
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/postPDBCreation.log append
+select TABLESPACE_NAME from cdb_tablespaces a,dba_pdbs b where a.con_id=b.con_id and UPPER(b.pdb_name)=UPPER('${pdbName}');
+connect "SYS"/"&&sysPassword" as SYSDBA
+alter session set container=${pdbName};
+set echo on
+spool ${ORACLE_BASE}/admin/${DBNAME}/scripts/postPDBCreation.log append
+Select count(*) from dba_registry where comp_id = 'DV' and status='VALID';
+alter session set container=CDB\$ROOT;
+exit;
+EOF
+
+	cat << EOF > ${scripts_dir}/init.ora
+db_block_size=8192
+open_cursors=${open_cursors}
+db_name="${DBNAME}"
+db_create_file_dest="$ORADATA"
+compatible=19.0.0
+diagnostic_dest=$ORACLE_BASE
+enable_pluggable_database=true
+nls_language="AMERICAN"
+nls_territory="AMERICA"
+processes=${processes}
+sga_target=${SGA_TARGET}M
+audit_file_dest="${ORACLE_BASE}/admin/${DBNAME}/adump"
+audit_trail=none
+remote_login_passwordfile=EXCLUSIVE
+dispatchers="(PROTOCOL=TCP) (SERVICE=${ORACLE_SID}XDB)"
+pga_aggregate_target=${PGA_AGGREGATE_TARGET}M
+undo_tablespace=UNDOTBS1
+EOF
+
 }
 
 #install post, clear, start_stop,backup
@@ -642,7 +914,8 @@ function main_() {
 
 	init_db_install_rsp
 	init_netca_rsp
-	init_dbca_rsp
+#	init_dbca_rsp
+	init_dbca_script
 
 	install_db_software
 	install_netca
