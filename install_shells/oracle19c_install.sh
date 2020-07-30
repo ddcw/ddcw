@@ -305,17 +305,17 @@ databaseType=MULTIPURPOSE
 automaticMemoryManagement=false
 totalMemory=0
 EOF
-	#with PDBS , pdbName=  initParams=enable_pluggable_database=true
+	#with PDBS , pdbName= createAsContainerDatabase=true  initParams=enable_pluggable_database=true 
 	echo_color info "init ${BASE_INSTALL_DIR}/dbca.rsp"
 	cat << EOF > ${BASE_INSTALL_DIR}/dbca.rsp
-responseFileVersion=/oracle/assistants/rspfmt_dbca_response_schema_v19.0.0
+responseFileVersion=/oracle/assistants/rspfmt_dbca_response_schema_v12.2.0
 gdbName=${gdbName}
 sid=${ORACLE_SID}
 databaseConfigType=SI
 policyManaged=false
 createServerPool=false
 force=false
-createAsContainerDatabase=false
+createAsContainerDatabase=true
 numberOfPDBs=1
 pdbName=${pdbName}
 useLocalUndoForPDBs=true
@@ -418,8 +418,10 @@ function install_dbca() {
 	#tail -f ${BASE_INSTALL_DIR}/dbca.log &
 	if [[  -z ${NOPDB}  ]]
 	then
+		echo_color info "pdbname: ${pdbName}"
 		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca.rsp #> ${BASE_INSTALL_DIR}/dbca.log
 	else
+		echo_color info "you chose NOPDB"
 		${ORACLE_HOME}/bin/dbca -silent -createDatabase  -responseFile ${BASE_INSTALL_DIR}/dbca_NOPDB.rsp #> ${BASE_INSTALL_DIR}/dbca.log
 	fi
 	#ps -ef | grep "${BASE_INSTALL_DIR}/dbca.log" | grep -v grep | awk '{print $2}' | xargs -t -i kill -9 {} >/dev/null 2>&1
