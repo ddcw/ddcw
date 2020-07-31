@@ -395,7 +395,7 @@ function install_db_software() {
                 echo_color warn "you should run script as root\n${ORACLE_BASE}/oraInventory/orainstRoot.sh\n${ORACLE_HOME}/root.sh. you can run like ${ASROOT_RUN}"
         else
                 su_command "sh ${ASROOT_RUN}"
-		echo_color "run orainstRoot.sh and root.sh auto finishd"
+		echo_color info "run orainstRoot.sh and root.sh auto finishd"
         fi
         endtime_dbinstall=$(date +%s)
         costm_dbinstall=`echo ${begintime_dbinstall} ${endtime_dbinstall} | awk '{print ($2-$1)/60}'`
