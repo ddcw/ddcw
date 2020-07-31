@@ -8,6 +8,7 @@
 #2020728 add main,zhu yao gong neng dou shi jin tian xie da. sai guo li hai tie ya zi da.
 #20200729 add install_soft netca dbca and other.
 #20200730 script instead of DBCA by ddcw.
+#2020731 by ddcw.  add auto rpm install expect, tips when faild.
 
 #this script support LANG=en_US.UTF-8 only.
 export LANG=en_US.UTF-8
@@ -896,6 +897,8 @@ function main_() {
 	init_parameter
 	configUSERset
 	[[ -z ${HELP_FLAG} ]] || help_this_script
+	#when rootpassword is TRUE, yum install expect.
+	[[ -z ${rootpassword} ]] || yum install expect -y >/dev/null 2>&1
 	[[ -z ${rootpassword} ]] || judge_rootpassword
 
 	mimacishu_current=0
