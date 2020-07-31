@@ -42,7 +42,7 @@ main shells will copy to /usr/bin and chmod +x shells/
 这个用法比较简单,和11g,12C一样的用法,直接执行就行,然后会给出建议脚本(/tmp/CheckOracleENV_19c/fixup_by_ddcw.sh),查看该脚本,没问题的话,就直接跑,多跑两边.  
   ``` shell
  	CheckOracleENV_19c  
-  	[[ -f /tmp/CheckOracleENV_19c/fixup_by_ddcw.sh ]] && sh /tmp/CheckOracleENV_19c/fixup_by_ddcw.sh
+  [[ -f /tmp/CheckOracleENV_19c/fixup_by_ddcw.sh ]] && sh /tmp/CheckOracleENV_19c/fixup_by_ddcw.sh
   ```
   
 - sshNopasswd:  
