@@ -38,6 +38,13 @@ main shells will copy to /usr/bin and chmod +x shells/
  	CheckCommDDCW [PARAMETER]
   ```
   
+- CheckOracleENV_19c:  
+这个用法比较简单,和11g,12C一样的用法,直接执行就行,然后会给出建议脚本(/tmp/CheckOracleENV_19c/fixup_by_ddcw.sh),查看该脚本,没问题的话,就直接跑,多跑两边.  
+  ``` shell
+ 	CheckOracleENV_19c
+        [[ -f /tmp/CheckOracleENV_19c/fixup_by_ddcw.sh ]] && sh /tmp/CheckOracleENV_19c/fixup_by_ddcw.sh
+  ```
+  
 - sshNopasswd:  
 配置ssh免密登录的,也就是把自己的公钥拷贝到目标用户的.ssh/authorized_keys 文件  
 具体的用法我也忘了... https://cloud.tencent.com/developer/article/1612304  
