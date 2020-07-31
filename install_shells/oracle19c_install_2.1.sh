@@ -779,6 +779,7 @@ function help_this_script() {
 	do
 		eval echo "$i=\$$i"
 	done
+	echo "rootpassword="
 	echo_color red "------------------------      END      ------------------------"
 	echo_color info "TIPS:  characterSet : AL32UTF8 ZHS16GBK"
 	exit 0
