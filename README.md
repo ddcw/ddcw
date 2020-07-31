@@ -67,14 +67,15 @@ main shells will copy to /usr/bin and chmod +x shells/
   ```
 
   
-- oracle19c_install.sh  
+- oracle19c_install_2.0.sh
 安装oracle19c单机的脚本,用法基本上和11g,12c的安装脚本一样,也得先跑CheckOracleENV20200328_19C.sh设置环境的脚本  
   ``` shell
-        /usr/local/ddcw/install_shells/oracle19c_install.sh [PARAMETERS]
-	部分参数如下:
+        /usr/local/ddcw/install_shells/oracle19c_install_2.0.sh [PARAMETERS]
+	部分参数如下(sh oracle19c_install_2.0.sh -h 就可以列出当前的脚本的默认配置):
 	sysPassword=
 	systemPassword=
 	pdbAdminPassword=
+	DB_NAME=
 	ORADATA=
 	INVENTORY_LOCATION_DIR=
 	pga_aggregate_target=
