@@ -1,0 +1,17 @@
+function _oracle19c_install()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    options="rootpassword=  ORACLE_SID= pdbName= DB_NAME= DB_UNIQUE_NAME= characterSet=AL32UTF8 processes= open_cursors= PGA_AGGREGATE_TARGET= SGA_TARGET= sysPassword= systemPassword= pdbAdminPassword= ORADATA= rootpassword= INVENTORY_LOCATION_DIR= IGNORE_PACK= EMPORT= LISTENER_NAMES= ORACLE_SOFTWARE_NAME= LISTENER_PORT= ORACLE_SOFTWARE= ORACLE_HOME= ORACLE_BASE= SE_ROOT_PASSWORD="
+
+    #case $prev in
+    #    *)
+                COMPREPLY=( $(compgen -W "${options}" -- $cur   ) )
+    #            ;;
+    #    esac
+
+}
+complete -F _oracle19c_install oracle19c_install_2.1.sh
+
