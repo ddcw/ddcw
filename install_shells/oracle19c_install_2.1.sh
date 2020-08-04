@@ -8,7 +8,8 @@
 #2020728 add main,zhu yao gong neng dou shi jin tian xie da. sai guo li hai tie ya zi da.
 #20200729 add install_soft netca dbca and other.
 #20200730 script instead of DBCA by ddcw.
-#2020731 by ddcw.  add auto rpm install expect, tips when faild.
+#20200731 by ddcw.  add auto rpm install expect, tips when faild.
+#20200804 by ddcw. add Auto clear log. archive log , alert log , listener log , audit log
 
 #this script support LANG=en_US.UTF-8 only.
 export LANG=en_US.UTF-8
@@ -710,7 +711,58 @@ EOF
 
 #install post, clear, start_stop,backup
 function set_clearFS() {
-	echo "set_clearFS to be continued"
+	#write at 20200804
+	#clear days default 7
+	[ "${CLEAR_DAYS}" -eq "${CLEAR_DAYS}" ] 2>/dev/null || export CLEAR_DAYS=7
+	[ "${ARCHIVE_LOG_CLEAR_DAYS}" -eq "${ARCHIVE_LOG_CLEAR_DAYS}" ] 2>/dev/null || export ARCHIVE_LOG_CLEAR_DAYS=7
+	cat << EOF > ~/scripts/AutoClearLog.sh
+#!/bin/env bash
+source ~/.bash_profile
+function exits(){
+	echo -e "[\`date +%Y%m%d-%H:%M:%S\`] \\033[31;40m\$1\\033[0m"
+	[ -z \$2 ] && exit \$2
+	exit 1
+}
+
+
+#clear archive log
+#DELETE NOPROMPT ARCHIVELOG UNTIL TIME "SYSDATE-7"; 
+#DELETE NOPROMPT ARCHIVELOG ALL COMPLETED BEFORE "SYSDATE-7"; 
+rman target / << EF
+DELETE NOPROMPT ARCHIVELOG ALL COMPLETED BEFORE "SYSDATE-${ARCHIVE_LOG_CLEAR_DAYS}";
+EF
+
+#trace/alert.log
+cd ${ORACLE_BASE}/diag/rdbms/${DB_NAME}/${ORACLE_SID}/trace || exits "no dir ${ORACLE_BASE}/diag/rdbms/${DB_NAME}/${ORACLE_SID}/trace"
+find . -name "*.trc" -mtime +${CLEAR_DAYS} | xargs -t -i rm -rf {}
+find . -name "*.trm" -mtime +${CLEAR_DAYS} | xargs -t -i rm -rf {}
+
+#listener.log
+cd $ORACLE_BASE/diag/tnslsnr/${ORACLE_HOSTNAME}/listener/alert || exits "no dir $ORACLE_BASE/diag/tnslsnr/${ORACLE_HOSTNAME}/listener/alert"
+find . -name "log_*.xml" -mtime +${CLEAR_DAYS} | xargs -t -i rm -rf {}
+cd $ORACLE_BASE/diag/tnslsnr/${ORACLE_HOSTNAME}/listener/trace || exits "no dir $ORACLE_BASE/diag/tnslsnr/${ORACLE_HOSTNAME}/listener/trace"
+if [[ "\$(du ./listener.log | awk '{print \$1}')" -gt 50000  ]] 
+then
+	tail -10000 > ./listener.log.bak
+	echo '' > ./listener.log
+fi
+
+#audit log
+cd /u01/app/oracle/admin/${DB_NAME}/adump || exits "no dir /u01/app/oracle/admin/${DB_NAME}/adump"
+find . -name "*.aud" -mtime +${CLEAR_DAYS} | xargs -t -i rm -rf {}
+
+EOF
+
+	chmod +x ~/scripts/AutoClearLog.sh
+
+}
+
+function set_crontab() {
+	[ -f ~/.crontab${dt}.cront ] || touch ~/.crontab${dt}.cront
+	crontab -l 1> ~/.crontab${dt}.cront 2>/dev/null
+	[ "`tail -1 ~/.crontab${dt}.cront`" == "30 23 * * 0 . ~/scripts/AutoClearLog.sh" ] || echo '30 23 * * 0 . ~/scripts/AutoClearLog.sh' >> ~/.crontab${dt}.cront
+	crontab  ~/.crontab${dt}.cront
+#	crontab -l | tail -1
 }
 
 function set_start_stop() {
@@ -745,13 +797,44 @@ echo_color info "stop: ~/scripts/oracle_stop.sh"
 
 
 function set_Backup() {
-	echo "to be continued..."
+	#this version is 12.2, I will rewrite it if have time.
+	backupdir=${ORACLE_BASE}/backup
+	mkdir -p ${ORACLE_BASE}/backup
+	mkdir -p ~/scripts
+	cpup="`cat /proc/cpuinfo | grep processor | wc -l`"
+	parallel=$(( ${cpup} / 8 ))
+	[ "${parallel}" -eq "${parallel}" ] || export parallel=1
+	[ "${parallel}" -eq "0" ] && export parallel=1
+	[ "${parallel}" -gt "8" ] && export parallel=8
+
+	valuespara="
+	dt=\$(date +%Y%m%d-%H%M%S)\n
+	source ~/.bash_profile\n
+	export dt=\$(date +%Y%m%d-%H%M%S)\n
+	expdp system/${systemPassword}@127.0.0.1:1521/${pdbName} directory=DataPump_Dir  dumpfile=${pdbName}_\${dt}_%U.dump job_name=${pdbName}\${dt} full=y  logtime=all logfile=${pdbName}_\${dt}_export.log COMPRESSION=all  parallel=${parallel}\n
+	cd ${backupdir} || exit 1\n
+	echo \"impdp system/${systemPassword}@127.0.0.1:1521/${pdbName} directory=DataPump_Dir  dumpfile=${pdbName}_\${dt}_%U.dump job_name=${pdbName}\${dt} full=y  logtime=all logfile=${pdbName}_\${dt}_import.log  parallel=${parallel}\" >> ${backupdir}/${pdbName}_\${dt}_export.log\n
+	tar -cvf ./expdp_${pdbName}_\${dt}.tar ./${pdbName}_\${dt}_*.* --remove-files\n
+	find ./ -name 'expdp_${pdbName}_*.tar' -mtime +3 | /usr/bin/xargs rm -rf {}\n
+
+	"
+	sqlplus  sys/${sysPassword}@127.0.0.1:1521/${pdbName} as sysdba <<EOF
+	CREATE DIRECTORY DataPump_Dir AS '${backupdir}';
+	grant write,read on directory DataPump_Dir  to system;
+EOF
+	echo -e ${valuespara} > ~/scripts/backupdata.sh
+	sed -i 's/^\s*//' ~/scripts/backupdata.sh
+	chmod +x ~/scripts/backupdata.sh
+	echo ""
+	echo_color info "you can run ~/scripts/backupdata.sh to backup your database ${pdbName}. just only reference"
 }
+
 
 function isntall_post() {
 	set_clearFS
 	set_start_stop
 	set_Backup
+	set_crontab
 
         grep "define" ${ORACLE_HOME}/sqlplus/admin/glogin.sql >/dev/null 2>&1  || echo -e "define _editor='vi'" >> ${ORACLE_HOME}/sqlplus/admin/glogin.sql
         grep "sqlprompt" ${ORACLE_HOME}/sqlplus/admin/glogin.sql >/dev/null 2>&1 || echo  set sqlprompt "_user'@'_connect_identifier> " >> ${ORACLE_HOME}/sqlplus/admin/glogin.sql
@@ -760,6 +843,7 @@ function isntall_post() {
 
 	$ORACLE_HOME/bin/sqlplus / as sysdba << EOF >> ${BASE_INSTALL_DIR}/sqlplus_set_parameters.log
 ALTER PROFILE default LIMIT PASSWORD_LIFE_TIME UNLIMITED;
+exec dbms_xdb_config.sethttpsport(${EMPORT});
 EOF
 
 	[[  -z ${NOPDB} ]] &&  $ORACLE_HOME/bin/sqlplus / as sysdba << EOF  >> ${BASE_INSTALL_DIR}/sqlplus_set_parameters.log
@@ -935,6 +1019,8 @@ function main_() {
 
 	endtime=`date +%s`
 	costm=`echo ${begintime} ${endtime} | awk '{print ($2-$1)/60}'`
+	echo_color info "you can run ~/scripts/AutoClearLog.sh to clear log , and it auto run at 23:30 Sunday"
+	echo_color info "OEM: https://127.0.0.1:${EMPORT}/em"
 	echo ""
 	echo_color info "sysPassword=${sysPassword}"
 	echo_color info "systemPassword=${systemPassword}"
