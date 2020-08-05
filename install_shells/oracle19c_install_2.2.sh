@@ -844,7 +844,7 @@ function isntall_post() {
 	then
 		echo 'grep oracle_start /etc/rc.local || echo 'su - ${CURRENT_USER} -c /home/${CURRENT_USER}/scripts/oracle_start.sh' >> /etc/rc.local && chmod +x /etc/rc.d/rc.local' >> ${ASROOT_RUN}
 	else
-		su_command  "grep oracle_start /etc/rc.local || echo 'su - ${CURRENT_USER} -c /home/${${CURRENT_USER}}/scripts/oracle_start.sh' >> /etc/rc.local && chmod +x /etc/rc.d/rc.local " ${rootpassword}
+		su_command  "grep oracle_start /etc/rc.local || echo 'su - ${CURRENT_USER} -c /home/${CURRENT_USER}/scripts/oracle_start.sh' >> /etc/rc.local && chmod +x /etc/rc.d/rc.local " 
 	fi
 
         grep "define" ${ORACLE_HOME}/sqlplus/admin/glogin.sql >/dev/null 2>&1  || echo -e "define _editor='vi'" >> ${ORACLE_HOME}/sqlplus/admin/glogin.sql
