@@ -13,5 +13,5 @@ function _oracle19c_install()
     #    esac
 
 }
-complete -F _oracle19c_install oracle19c_install_2.1.sh
+complete -F _oracle19c_install oracle19c_install_2.2.sh
 

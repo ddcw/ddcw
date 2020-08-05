@@ -10,6 +10,7 @@
 #20200730 script instead of DBCA by ddcw.
 #20200731 by ddcw.  add auto rpm install expect, tips when faild.
 #20200804 by ddcw. add Auto clear log. archive log , alert log , listener log , audit log
+#20200805 by ddcw. add auto start on boot and fixd some bugs(set_clear script failed)
 
 #this script support LANG=en_US.UTF-8 only.
 export LANG=en_US.UTF-8
@@ -104,9 +105,9 @@ function init_parameter() {
 	export  EMPORT=5500
 	export  pdbName=${ORACLE_SID}pdb
 	export  ORADATA=${ORACLE_BASE}/oradata
-	export  sysPassword=Ddcw.${ORACLE_SID}
-	export  systemPassword=Ddcw.${ORACLE_SID}
-	export  pdbAdminPassword=Ddcw.${ORACLE_SID}
+	export  sysPassword=Ddcw.1${ORACLE_SID}
+	export  systemPassword=Ddcw.2${ORACLE_SID}
+	export  pdbAdminPassword=Ddcw.3${ORACLE_SID}
 
 	export ORACLE_SOFTWARE_NAME="LINUX.X64_193000_db_home.zip"
 	
@@ -398,6 +399,7 @@ function install_db_software() {
         else
                 su_command "sh ${ASROOT_RUN}"
 		echo_color info "run orainstRoot.sh and root.sh auto finishd"
+		echo '' > ${ASROOT_RUN}
         fi
         endtime_dbinstall=$(date +%s)
         costm_dbinstall=`echo ${begintime_dbinstall} ${endtime_dbinstall} | awk '{print ($2-$1)/60}'`
@@ -715,6 +717,7 @@ function set_clearFS() {
 	#clear days default 7
 	[ "${CLEAR_DAYS}" -eq "${CLEAR_DAYS}" ] 2>/dev/null || export CLEAR_DAYS=7
 	[ "${ARCHIVE_LOG_CLEAR_DAYS}" -eq "${ARCHIVE_LOG_CLEAR_DAYS}" ] 2>/dev/null || export ARCHIVE_LOG_CLEAR_DAYS=7
+	mkdir -p ~/scripts
 	cat << EOF > ~/scripts/AutoClearLog.sh
 #!/bin/env bash
 source ~/.bash_profile
@@ -835,6 +838,14 @@ function isntall_post() {
 	set_start_stop
 	set_Backup
 	set_crontab
+
+	#set auto start on boot
+	if [ -z ${rootpassword} ]
+	then
+		echo 'grep oracle_start /etc/rc.local || echo 'su - ${CURRENT_USER} -c /home/${CURRENT_USER}/scripts/oracle_start.sh' >> /etc/rc.local && chmod +x /etc/rc.d/rc.local' >> ${ASROOT_RUN}
+	else
+		su_command  "grep oracle_start /etc/rc.local || echo 'su - ${CURRENT_USER} -c /home/${${CURRENT_USER}}/scripts/oracle_start.sh' >> /etc/rc.local && chmod +x /etc/rc.d/rc.local " ${rootpassword}
+	fi
 
         grep "define" ${ORACLE_HOME}/sqlplus/admin/glogin.sql >/dev/null 2>&1  || echo -e "define _editor='vi'" >> ${ORACLE_HOME}/sqlplus/admin/glogin.sql
         grep "sqlprompt" ${ORACLE_HOME}/sqlplus/admin/glogin.sql >/dev/null 2>&1 || echo  set sqlprompt "_user'@'_connect_identifier> " >> ${ORACLE_HOME}/sqlplus/admin/glogin.sql
@@ -1020,7 +1031,7 @@ function main_() {
 	endtime=`date +%s`
 	costm=`echo ${begintime} ${endtime} | awk '{print ($2-$1)/60}'`
 	echo_color info "you can run ~/scripts/AutoClearLog.sh to clear log , and it auto run at 23:30 Sunday"
-	echo_color info "OEM: https://127.0.0.1:${EMPORT}/em"
+	echo_color info "OEM: https://127.0.0.1:${EMPORT}/em   --without container name"
 	echo ""
 	echo_color info "sysPassword=${sysPassword}"
 	echo_color info "systemPassword=${systemPassword}"
@@ -1028,5 +1039,7 @@ function main_() {
 	echo_color info "dbinstall cost: ${costm_dbinstall}"
 	echo_color info "dbca cost: ${costm_dbca}"
 	echo -e "\n\033[1;41;33m `date +%Y%m%d-%H:%M:%S`TOTAL COST ${costm} minutes\033[0m"
+
+	[[ $(wc -l ${ASROOT_RUN} | awk '{print $1}') -gt 1 ]] && echo_color warn "you should run ${ASROOT_RUN} to finishd"
 }
 main_
