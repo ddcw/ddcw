@@ -37,6 +37,9 @@ function echo_color() {
     info|INFO|IF|I|i)
       echo -e "[\033[32;40mINFO\033[0m `date +%Y%m%d-%H:%M:%S`] \033[32;40m$2\033[0m"
       ;;
+    infos|INFOS|IFS|IS|is)
+      echo -e "[\033[32;40mINFO `date +%Y%m%d-%H:%M:%S`] \033[0m    $2\n"
+      ;;
     highlightbold)
       echo -e "\033[1;41;33m$2\033[0m"
       ;;
@@ -132,17 +135,23 @@ function create_directory() {
 	echo "grant write,read on directory ${directory_name} to ${expdp_user};"
 }
 
-function select_db() {
+
+function init_tables() {
 	tables_detail=$(echo ${TABLES} | sed 's/,/ /g')
-	user_table_detail=""
-	user_table_index=""
-	for i in ${tables_detail}
-	do
-		users=$(echo $i | awk -F . '{print $1}')
-		tables=$(echo $i | awk -F . '{print $2}')
-		[[ -z ${user_table_detail} ]] && user_table_detail="(dbse.owner = upper('${users}') and dbse.segment_name = upper('${tables}'))" || user_table_detail="${user_table_detail} \nor (dbse.owner = upper('${users}') and dbse.segment_name = upper('${tables}'))"
-		[[ -z ${user_table_index} ]] && user_table_index="(dbi.owner = upper('${users}') and dbi.table_name = upper('${tables}'))" || user_table_index="${user_table_index} \nor (dbi.owner = upper('${users}') and dbi.table_name = upper('${tables}'))"
-	done
+        export owner_table=""
+	export owner_segment_name=""
+        for i in ${tables_detail}
+        do
+                users=$(echo $i | awk -F . '{print $1}')
+                tables=$(echo $i | awk -F . '{print $2}')
+		[[ -z ${owner_table} ]] && owner_table="(owner =  upper('${users}') and table_name = upper('${tables}'))" || owner_table="${owner_table} \nor (owner =  upper('${users}') and table_name = upper('${tables}'))"
+		[[ -z ${owner_segment_name} ]] && owner_segment_name="(owner = upper('${users}') and segment_name = upper('${tables}'))" || owner_segment_name="${owner_segment_name} \nor (owner = upper('${users}') and segment_name = upper('${tables}'))"
+        done
+
+
+}
+
+function select_db() {
 
 	echo_color info "--table detail"
 	echo "col owner format a15;"
@@ -158,7 +167,7 @@ function select_db() {
        dbse.tablespace_name,
        dbse.bytes / 1024 / 1024
   from dba_segments dbse
- where ${user_table_detail};"
+ where ${owner_segment_name};"
 	echo ''
 	echo ''
 	echo ''
@@ -174,7 +183,7 @@ function select_db() {
        echo -e "select count(*) TOTAL_TABLE_NUMBER,
 	sum(dbse.bytes) / 1024 / 1024 size_MB
   from dba_segments dbse
- where ${user_table_detail};"
+ where ${owner_segment_name};"
         echo ''
         echo ''
         echo ''
@@ -197,7 +206,10 @@ function select_db() {
  where  dbse.segment_name in
        (select dbi.index_name
           from dba_indexes dbi
-         where ${user_table_index});"
+         where ${owner_table});"
+
+	echo ''
+	exits " you can run sh ${thisript} [datapumpddcw.par]"
 }
 
 function PARAMS_1() {
@@ -223,7 +235,7 @@ function main_() {
 	echo_color warn "SOURCE DB BEGIN EXPORT WAYS  ---------------------"
 	echo_color info "1. you should export data."
 	echo ''
-	echo -e "\t\t expdp ${CONNECT_1} directory=${DIRECTORY_1} dumpfile=${DUMPFILE} job_name=${JOBNAME_1} logfile=${LOGFILE_1} parallel=${PARALLEL_1} COMPRESSION=${COMPRESSION} tables=${TABLES}\n"
+	echo -e "\t     expdp ${CONNECT_1} directory=${DIRECTORY_1} dumpfile=${DUMPFILE} job_name=${JOBNAME_1} logfile=${LOGFILE_1} parallel=${PARALLEL_1} COMPRESSION=${COMPRESSION} tables=${TABLES}\n"
 	echo_color info "2. when it finish, you should cp ${DIRECTORY_OS_1}/${DUMPFILE} to destination ${DIRECTORY_OS_2}."
 	echo_color warn "SOURCE DB END EXPORT WAYS------------------------"
 	echo -e "\n\n\n\n"
@@ -232,16 +244,36 @@ function main_() {
 	echo_color info "there has two ways for import data;"
 	echo_color info "FIRST WAY:  "
 	echo ''
-	echo -e "\t\timpdp ${CONNECT_2} directory=${DIRECTORY_2} dumpfile=${DUMPFILE} job_name=${JOBNAME_2} logfile=${LOGFILE_2} $( [[ -z ${REMAP_SCHEMA} ]] || echo "REMAP_SCHEMA=${REMAP_SCHEMA}" ) $( [[ -z ${REMAP_TABLESPACE} ]] || echo "REMAP_TABLESPACE=${REMAP_TABLESPACE}" ) parallel=${PARALLEL_2} tables=${TABLES} \n
+	echo -e "\t    impdp ${CONNECT_2} directory=${DIRECTORY_2} dumpfile=${DUMPFILE} job_name=${JOBNAME_2} logfile=${LOGFILE_2} $( [[ -z ${REMAP_SCHEMA} ]] || echo "REMAP_SCHEMA=${REMAP_SCHEMA}" ) $( [[ -z ${REMAP_TABLESPACE} ]] || echo "REMAP_TABLESPACE=${REMAP_TABLESPACE}" ) parallel=${PARALLEL_2} tables=${TABLES} \n
  "
-	echo_color info "SECCOND WAY : "
-	echo -e "1."
+	echo_color info "SECCOND WAY : import data , index , constraint and statics"
+	echo -e "\t    1. import data"
+	echo -e "\t    impdp ${CONNECT_2} directory=${DIRECTORY_2} dumpfile=${DUMPFILE} job_name=${JOBNAME_2} logfile=${LOGFILE_2} $( [[ -z ${REMAP_SCHEMA} ]] || echo "REMAP_SCHEMA=${REMAP_SCHEMA}" ) $( [[ -z ${REMAP_TABLESPACE} ]] || echo "REMAP_TABLESPACE=${REMAP_TABLESPACE}" ) parallel=${PARALLEL_2} tables=${TABLES} EXCLUDE=index,statistics,constraint \n"
+	echo -e "\t    2. import index"
+	echo -e "\t    impdp ${CONNECT_2} directory=${DIRECTORY_2} dumpfile=${DUMPFILE} job_name=${JOBNAME_2} logfile=${LOGFILE_2} $( [[ -z ${REMAP_SCHEMA} ]] || echo "REMAP_SCHEMA=${REMAP_SCHEMA}" ) $( [[ -z ${REMAP_TABLESPACE} ]] || echo "REMAP_TABLESPACE=${REMAP_TABLESPACE}" ) parallel=${PARALLEL_2} tables=${TABLES} include=index content=metadata_only sqlfile=index${dt_f1}.sql \n"
+	echo -e "\t     #you can modifid ${DIRECTORY_OS_2}/index${dt_f1}.sql parallels"
+	echo -e "\t    sqlplus  ${CONNECT_2} << EOF"
+	echo -e "    @${DIRECTORY_OS_2}/index${dt_f1}.sql"
+	echo -e "EOF\n"
+	echo -e "\t    3. import constraint"
+	echo -e "\t    impdp ${CONNECT_2} directory=${DIRECTORY_2} dumpfile=${DUMPFILE} job_name=${JOBNAME_2} logfile=${LOGFILE_2} $( [[ -z ${REMAP_SCHEMA} ]] || echo "REMAP_SCHEMA=${REMAP_SCHEMA}" ) $( [[ -z ${REMAP_TABLESPACE} ]] || echo "REMAP_TABLESPACE=${REMAP_TABLESPACE}" ) parallel=${PARALLEL_2} tables=${TABLES} include=constraint \n"
+	echo -e "\t    4. import tatics"	
+	echo -e "\t    impdp ${CONNECT_2} directory=${DIRECTORY_2} dumpfile=${DUMPFILE} job_name=${JOBNAME_2} logfile=${LOGFILE_2} $( [[ -z ${REMAP_SCHEMA} ]] || echo "REMAP_SCHEMA=${REMAP_SCHEMA}" ) $( [[ -z ${REMAP_TABLESPACE} ]] || echo "REMAP_TABLESPACE=${REMAP_TABLESPACE}" ) parallel=${PARALLEL_2} tables=${TABLES} include=statistics \n"
+	
 	echo_color warn "DEST DB IMPORT END------------------------------"
+	echo ''
+	echo_color info "check table total;"
+	echo_color infos "  --tables:     select count(*) TOTAL_TABLE_NUMBER,sum(dbse.bytes) / 1024 / 1024 size_MB from dba_segments dbse where ${owner_segment_name};"
+	echo_color infos "  --indexs:     select count(*) TOTAL_INDEX_NUMBER, sum(dbse.bytes) / 1024 / 1024 SIZE_MB  from dba_segments dbse  where  dbse.segment_name in   (select dbi.index_name from dba_indexes dbi  where ${owner_table});"
+	echo_color infos "  --constraint: select count(*) TOTAL_CONSTRAINT   from dba_constraints  where ${owner_table};"
+	echo_color infos "  --statics:    select count(*) TOTAL_STATICS  from dba_tables dbse where ${owner_table};"
+	echo_color info "check finish"
 }
 
 #[[ -z ${FIRST_PARAMETER} ]] || PARAMS_1
 PARAMS_1
 init_first
+init_tables
 [[ -z ${IS_CREATE_DIRECTORY} ]] || create_directory
 [[ -z ${IS_SELECT} ]] || select_db
 
