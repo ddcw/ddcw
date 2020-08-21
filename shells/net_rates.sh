@@ -2,6 +2,7 @@
 #write by ddcw at 20200820
 
 #20200821 modifid by ddcw : finish it.
+#20200821 11:01 modifid by ddcw : add sed packages..
 
 #sh SCRIPT [min_rate]
 
@@ -12,6 +13,7 @@ function exits(){
   exit 1
 }
 
+#format echo with color
 function echo_color() {
   case $1 in
     green)
@@ -63,6 +65,7 @@ export current_net=$(ifconfig -a | grep RUNNING | awk -F : '{print $1}')
 for i in ${current_net}
 do
 	eval export ${i}_rate1=$(ifconfig $i | grep 'RX packets' | awk '{print $5}')
+	eval export ${i}_rate2=$(ifconfig $i | grep 'TX packets' | awk '{print $5}')
 #	eval echo \$${i}_rate1 ----------- 
 done
 
@@ -71,21 +74,27 @@ function print_rate() {
 	while true
 	do
 	sleep ${time_internal}
-		echo_color info  ""
+		echo_color info  "\tRecive(in)\t\t\t\tSend(out)"
 		rate1=0
 		rate2=0
-		rates=0
+		rates_rev=0
+		rates_sen=0
 		for i in ${current_net}
 		do
 			rate1=$(eval echo \$${i}_rate1)
 			rate2=$(ifconfig $i | grep 'RX packets' | awk '{print $5}')
+			rate3=$(eval echo \$${i}_rate2)
+			rate4=$(ifconfig $i | grep 'TX packets' | awk '{print $5}')
 			eval export ${i}_rate1=${rate2}
-			rates=$[ ${rate2} - ${rate1} ]
-			[[ ${rates} -lt ${min_rate} ]] && continue
-			echo  -e "$i \t\t ${rates} bytes/s \t\t \033[31;40m $[ ${rates} / 1024 ]\033[0m KB/s \t\t $[ ${rates} / 1024 /1024 ] MB/s"
+			rates_rev=$[ ${rate2} - ${rate1} ]
+			rates_sen=$[ ${rate2} - ${rate1} ]
+			[[ ${rates_rev} -lt ${min_rate} ]] && continue
+			echo  -e "$i \t ${rates_rev} bytes/s \t \033[31;40m $[ ${rates_rev} / 1024 ]\033[0m KB/s \t $[ ${rates_rev} / 1024 /1024 ] MB/s \t\t${rates_sen}  bytes/s \t \033[31;40m $[ ${rates_sen} / 1024 ]\033[0m KB/s \t $[ ${rates_sen} / 1024 /1024 ] MB/s"
 		done
+		echo ''
 		echo ''
 	#break
 	done
 }
 print_rate
+
