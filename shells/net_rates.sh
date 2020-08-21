@@ -1,4 +1,4 @@
-#!/bin/env
+#!/bin/env bash
 #write by ddcw at 20200820
 
 #20200821 modifid by ddcw : finish it.
