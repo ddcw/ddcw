@@ -52,6 +52,13 @@ main shells will copy to /usr/bin and chmod +x shells/
          sshNopasswd  [用户名@]主机名[:端口]  [密码]
   ```
 
+- net_rates.sh  
+测试网速的脚本. 使用方法:sh net_rates.sh [网速限制(单位:字节)]  
+  ``` shell
+	#网速低于40 b/s 的就不显示.
+	sh net_rates.sh 40
+  ```
+
   
 - ZK_PseudoCluster_install.sh:  
 安装zookeeper伪集群的,默认端口是218+node 比如2181 2182 2183 这样子的,目前版本不支持参数  
