@@ -52,6 +52,12 @@ main shells will copy to /usr/bin and chmod +x shells/
          sshNopasswd  [用户名@]主机名[:端口]  [密码]
   ```
 
+- grepDDCW:  
+类似于grep,只不过会显示所有的内容,关键词有颜色,支持管道符和正则表达式  
+  ``` shell
+         sh grepDDCW.sh KEY_WORD|REGEX FILE_NAME [--color green|red|warn|blue]
+  ```
+
 - net_rates.sh  
 测试网速的脚本. 使用方法:sh net_rates.sh [网速限制(单位:字节)]  
   ``` shell
