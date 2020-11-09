@@ -1,5 +1,6 @@
 #!/bin/env bash
 #write by ddcw at 20201109
+#图形化的, 我就不写man和用法了.^_^
 #这个脚本主要是配置清华的镜像源, 支持base,epel,zabbix,mysql,elk,docker(不含docker仓库地址哦),jenkins
 
 #判断dialog是否安装
