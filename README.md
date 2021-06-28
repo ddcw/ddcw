@@ -98,3 +98,8 @@ main shells will copy to /usr/bin and chmod +x shells/
 	rootpassword=
   ```
 
+- tableCheckSum.sh  
+检查mysql源和目标表的行数的.
+  ``` shell
+        sh tableCheckSum.sh SRC_IP=192.168.1.2 SRC_USER=u1 SRC_PASSWORD=123456 SRC_PORT=3306 SRC_DBNAME=db1 DST_IP=192.168.1.3  DST_USER=u1 DST_PASSWORD=123456 DST_PORT=3306 DST_DBNAME=db2 PARALLEL=16 
+  ```
