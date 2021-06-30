@@ -103,3 +103,8 @@ main shells will copy to /usr/bin and chmod +x shells/
   ``` shell
         sh tableCheckSum.sh SRC_IP=192.168.1.2 SRC_USER=u1 SRC_PASSWORD=123456 SRC_PORT=3306 SRC_DBNAME=db1 DST_IP=192.168.1.3  DST_USER=u1 DST_PASSWORD=123456 DST_PORT=3306 DST_DBNAME=db2 PARALLEL=16 
   ```
+- mysqlBinlogSYNC.sh  
+实时同步mysqlbinlog的脚本, 建议配合定时任务执行, 不支持传参, 参数直接修改脚本即可.
+  ``` shell
+        sh mysqlBinlogSYNC.sh
+  ```
