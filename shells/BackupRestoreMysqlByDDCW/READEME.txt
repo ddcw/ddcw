@@ -1,0 +1,29 @@
+使用说明:
+配置好BackupXtraAndBinlog.sh脚本后, 直接执行即可
+RestoreXtraAndBinlog.sh 可以用作恢复
+
+例子:
+sh BackupXtraAndBinlog.sh #设置了一堆定时任务,和相关参数
+#然后过了很久, 数据库不小心丢了数据了, 就使用RestoreXtraAndBinlog.sh恢复
+sh RestoreXtraAndBinlog.sh  #不跟时间就是列出当前可用的时间点(最后一个是最新的binlog时间, 前面的时间点是物理全备或者增备的,  只要是这个时间范围之类即可, 不一定要是列出来的时间)
+sh RestoreXtraAndBinlog.sh 2021-07-07_17-27-20
+
+
+
+
+
+脚本说明:
+BackupXtraAndBinlog.sh   设置备份定时任务的, 也会设置syncbinlog.sh 和 Xtrabackup.sh 和 RestoreXtraAndBinlog.sh 的参数
+RestoreXtraAndBinlog.sh  恢复脚本, 执行就能恢复仁义时间点的数据(没做时间范围判断, 所以恢复尽可能新的数据吧)  该脚本运行的时候会把参数传递给Xtrabackup.sh做物理恢复  binlogRestore.sh做binlog恢复
+
+BackupXtraAndBinlog.sh 物理备份脚本 默认全备, 跟个1就表示增量备份:  比如 sh BackupXtraAndBinlog.sh 1 就是增量备份的意思
+syncbinlog.sh	同步binlog日志的脚本, 有定时任务,每分钟都去执行的(运行的就不会继续运行)
+
+Xtrabackup.sh  物理备份的恢复脚本.  sh Xtrabackup.sh 2021-07-07_17-36-45这种就行
+binlogRestore.sh  binlog恢复脚本   sh binlogRestore.sh "2021-07-07_17-26-58" "2021-07-07 17:27:20"   第一个参数是起始时间  第二个参数是结束时间. 暂不支持lsn
+
+#本脚本使用的物理备份工具为 percona的xtrabackup
+
+
+联系作者: https://cloud.tencent.com/developer/user/1130242
+	https://github.com/ddcw/ddcw/tree/master/shells/BackupRestoreMysqlByDDCW
