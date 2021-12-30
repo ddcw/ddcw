@@ -36,7 +36,7 @@ function ssh_command(){
         spawn ssh  -p ${sshport} ${user_host} ${commd}
         expect { 
                         "(yes/no" {send "yes\r";exp_continue}
-                        "password:" {send "${password}\r"}
+                        "assword:" {send "${password}\r"}
         }
         expect "${user}@*" {send "exit\r"}
         expect eof
