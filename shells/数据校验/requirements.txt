@@ -1,0 +1,16 @@
+configparser==5.2.0
+cx-Oracle==8.3.0
+datacompy==0.7.3
+greenlet==1.1.2
+importlib-metadata==4.8.3
+numpy==1.19.5
+ordered-set==4.0.2
+pandas==1.1.5
+psycopg2==2.7.7
+PyMySQL==1.0.2
+python-dateutil==2.8.2
+pytz==2021.3
+six==1.16.0
+SQLAlchemy==1.4.31
+typing_extensions==4.0.1
+zipp==3.6.0
