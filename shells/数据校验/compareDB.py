@@ -23,7 +23,7 @@ TARGET_SQL=config.get('DATA','sql_target')
 
 
 def get_engine(db):
-	if db[0:5] == 'MYSQL' or db[0:11] == 'TDSQL-MYSQL' or db[0:5] == 'HOTDB':
+	if db[0:5] == 'MYSQL' or db[0:11] == 'TDSQL-MYSQL' 
 		db_host = config.get(db,'db_host')
 		db_port = config.get(db,'db_port')
 		db_user = config.get(db,'db_user')
