@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/html">
+<head lang="en">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style type="text/css">
+        .input1{
+    width: 250px;
+    height: 30px;
+    border: 1px solid darkgray;
+}
+        .input2{
+        width:333px;
+        height:30px;
+        border:1px solid darkgray
+        }
+    </style>
+    <script type="text/javascript">
+        console.log("最新地址: https://github.com/ddcw/ddcw/tree/master/html/GetImportExportCommand.html")
+        console.log("博客地址: https://cloud.tencent.com/developer/user/1130242")
+        console.log("个人网站: https://www.itddcw.com")
+        var ExtraParameter=0  //额外参数 0 表示隐藏   1 表示展开 只有展开的时候 才会考虑是否启用该参数
+        var set_radio=0 // 额外参数启用还是禁用 0 表示全部启用  1表示全部禁用
+       //alert(document.getElementsByName("ExtraParameter").innerHTML)
+        function onc(a){
+            var t="t"+a
+            document.getElementById(t).style="display:block"
+            if(a==1)document.getElementById(t).innerHTML="多个之间用分号(;)或者逗号(,)或者空格( )隔开. "
+            if(a==1 && document.getElementById("i0").options[document.getElementById("i0").selectedIndex].value=="POSTGRESQL") document.getElementById(t).innerHTML="pg_dump只支持单个数据库导出"
+            if(a==2)document.getElementById(t).innerHTML="多个之间用分号(;)或者逗号(,)或者空格( )隔开.  默认为全部表"
+            if(a==3)document.getElementById(t).innerHTML="自定义参数将原封不动的追加到导出语句上(比如where)"
+        }
+
+        function set_radios(){
+            radios=document.getElementsByClassName("check_radio")
+            if (set_radio==0){
+                set_radio=1
+                document.getElementById("check_radio").innerHTML="全部启用"
+                for (i=0;i<radios.length;i++){
+                    if(radios[i].value=="YES"){
+                        radios[i].checked=false
+                    }
+                    else if(radios[i].value=="NO"){
+                        radios[i].checked=true
+                    }
+                }
+            }
+            else if(set_radio==1){
+                set_radio=0
+                document.getElementById("check_radio").innerHTML="全部禁用"
+                for (i=0;i<radios.length;i++){
+                    if(radios[i].value=="YES"){
+                        radios[i].checked=true
+                    }
+                    else if(radios[i].value=="NO"){
+                        radios[i].checked=false
+                    }
+                }
+            }
+        }
+
+        function onb(a){
+            var t="t"+a
+            var i="i"+a
+            document.getElementById(t).style="display:none"
+            if (a==0){
+	            ExtraParameter=0
+                document.getElementById("check_radio").style.display="none"
+	            document.getElementById("moreExtraParameter").innerHTML="展开高级选项"
+	            needhide=document.getElementsByClassName("ExtraParameter")
+	            for (var i=0; i<needhide.length; i++){
+	                needhide[i].style.display="none"
+	            }
+                dbtype=document.getElementById("i0").options[document.getElementById("i0").selectedIndex].value
+                if(dbtype=="MYSQL"){
+                    document.getElementById("port").value="3306"
+                    document.getElementById("username").value="root"
+                    document.getElementById("dbname_value").innerHTML="数据库名"
+                    document.getElementById("i1").value=""
+                    document.getElementById("oracle_dir").style.display="none"
+                    document.getElementById("attach").style.display="none"
+                    document.getElementById("schema").style.display="none"
+                }
+                else if(dbtype=="ORACLE"){
+                    document.getElementById("port").value="1521"
+                    document.getElementById("dbname_value").innerHTML="服务名/SID"
+                    if(!document.getElementById("i1").value) document.getElementById("i1").value="ddcwpdb"
+                    document.getElementById("username").value="system"
+                    document.getElementById("oracle_dir").style.display=""
+                    document.getElementById("attach").style.display=""
+                    if(!document.getElementById("i4").value) document.getElementById("i4").value="data_dir"
+                    if(!document.getElementById("i5").value) document.getElementById("i5").value="ddcw"
+                    document.getElementById("schema").style.display=""
+                }
+                else if(dbtype=="POSTGRESQL"){
+                    document.getElementById("port").value="54321"
+                    document.getElementById("username").value="postgre"
+                    document.getElementById("dbname_value").innerHTML="数据库名"
+                    document.getElementById("i1").value=""
+                    document.getElementById("oracle_dir").style.display="none"
+                    document.getElementById("attach").style.display="none"
+                    document.getElementById("schema").style.display="none"
+                }
+            }
+        }
+
+
+        //高级选项
+        function showMore(){
+            dbtype=document.getElementById("i0").options[document.getElementById("i0").selectedIndex].value
+	        if(dbtype=="MYSQL") var needshow=document.getElementsByClassName("MYSQL")
+	        if(dbtype=="ORACLE") var needshow=document.getElementsByClassName("ORACLE")
+	        if(dbtype=="POSTGRESQL") var needshow=document.getElementsByClassName("POSTGRESQL")
+        	if( ExtraParameter == 0){
+	            ExtraParameter=1
+	            document.getElementById("moreExtraParameter").innerHTML="隐藏高级选项"
+                document.getElementById("check_radio").style.display=""
+	            for (var i=0; i<needshow.length; i++){
+	                needshow[i].style.display=""
+	            }
+            }
+	        else if ( ExtraParameter == 1 ) {
+	            ExtraParameter=0
+	            document.getElementById("moreExtraParameter").innerHTML="展开高级选项"
+                document.getElementById("check_radio").style.display="none"
+	            needhide=document.getElementsByClassName("ExtraParameter")
+	            for (var i=0; i<needhide.length; i++){
+	                needhide[i].style.display="none"
+	            }
+	        }
+}
+
+        //生成导出和导入命令
+        function getCOMMAND(){
+            var d=new Date()
+            host=document.getElementById("host").value
+            port=document.getElementById("port").value
+            username=document.getElementById("username").value
+            password=document.getElementById("password").value
+            dbtype=document.getElementById("i0").options[document.getElementById("i0").selectedIndex].value
+            dbname=document.getElementById("i1").value.replace(/^\s*|\s*$/g,"")
+            servicename=dbname
+            oracle_dir=document.getElementById("i4").value
+            schema=document.getElementById("i5").value.replace(/^\s*|\s*$/g,"")
+            table_name=document.getElementById("i2").value.replace(/^\s*|\s*$/g,"")
+            timestamp_format=""+d.getFullYear()+d.getMonth()+d.getDate()+d.getHours()+d.getMinutes()+d.getSeconds()
+            parallel=document.getElementById('parallel').value
+            custom_parameter=document.getElementById('i3').value
+            var compression=0
+            var no_data=0
+            var no_ddl=0
+            var gtid=0
+            var routins=0
+            var trigers=0
+            var events=0
+            var cols=0
+            var quick=0
+            var drop_ddl=0
+            var tz_utc=0
+            if (document.getElementsByName("compression")[0].checked ) compression=1
+            if(document.getElementsByName('no_data')[0].checked && document.getElementsByName("no_data_1")[0].checked) no_data=1
+            if(document.getElementsByName('no_ddl')[0].checked && document.getElementsByName('no_ddl_1')[0].checked ) no_ddl=1
+            if(document.getElementsByName('gtid')[0].checked && document.getElementsByName('gtid_1')[0].checked) gtid=1
+            if(document.getElementsByName('routins')[0].checked && document.getElementsByName('routins_1')[0].checked) routins=1
+            if(document.getElementsByName('trigers')[0].checked && document.getElementsByName('trigers_1')[0].checked) trigers=1
+            if(document.getElementsByName('events')[0].checked && document.getElementsByName('events_1')[0].checked) events=1
+            if(document.getElementsByName('cols')[0].checked && document.getElementsByName('cols_1')[0].checked ) cols=1
+            if(document.getElementsByName('quick')[0].checked && document.getElementsByName('quick_1')[0].checked ) quick=1
+            if(document.getElementsByName('drop_ddl')[0].checked && document.getElementsByName('drop_ddl_1')[0].checked ) drop_ddl=1
+            if(document.getElementsByName('tz_utc')[0].checked && document.getElementsByName('tz_utc_1')[0].checked ) tz_utc=1
+
+            if (dbtype=="MYSQL"){
+                mysqldump_1="mysqldump -h "+host+" -P "+port+" -u "+username+" -p"+password
+                mydumper_1="mydumper -h "+host+" -P "+port+" -u "+username+" -p "+password
+                mysqldump_2="mysql -h "+host+" -P "+port+" -u "+username+" -p"+password
+                mydumper_2="myloader -h "+host+" -P "+port+" -u "+username+" -p "+password
+                if (!!dbname){
+                    dbname=dbname.replace(/;/g,' ')
+                    dbname=dbname.replace(/,/g,' ')
+                    mysqldump_1=mysqldump_1+" --databases " + dbname
+                    dbname_arr=dbname.split(/\s+/)
+                    //mydumper导出多个库 得写正则表达式.. 比如  -x '^(db1\.|db3\.|db2\.)'
+                    if(dbname_arr.length>1){
+                        for (x in dbname_arr){
+                            if(x==0){
+                                mydumper_1+=" -x '^("+dbname_arr[x]+"\\."
+                            }
+                            else if(parseInt(x)+1==dbname_arr.length){
+                                mydumper_1+="|"+dbname_arr[x]+"\\.)'"
+                            }
+                            else{
+                                mydumper_1+="|"+dbname_arr[x]+"\\."
+                            }
+
+                        }
+                    }
+                    else{
+                        mydumper_1=mydumper_1+" --database " + dbname
+                    }
+                }
+                else{
+                    mysqldump_1=mysqldump_1+" --all-databases"
+                }
+                if (!!table_name){
+                    table_name=table_name.replace(/;/g,' ')
+                    table_name=table_name.replace(/,/g,' ')
+                    mysqldump_1=mysqldump_1+" --tables " + table_name
+                    table_name_arr=table_name.split(/\s+/)
+                    mydumper_1+=" -T "+table_name_arr.join(",")
+                }
+
+                if(ExtraParameter==1){
+                    if (!!parallel && document.getElementsByName("parallel_1")[0].checked){
+                        mydumper_1+=" -t "+parallel
+                        mydumper_2+=" -t "+parallel
+                    }
+                    if(no_data==1 ){ mysqldump_1=mysqldump_1+" -d ";mydumper_1+=" -d "}
+                    if(no_ddl==1 ) {mysqldump_1=mysqldump_1+" -t "; mydumper_1+=" -m "}
+                    if(!gtid==1 && gtid!=0) mysqldump_1=mysqldump_1+" --set-gtid-purged=off "
+                    if(routins==1) {mysqldump_1+=" --routines "; mydumper_1+=" --routines " }
+                    if(!trigers==1 && document.getElementsByName("trigers_1")[0].checked){
+                        mysqldump_1+=" --skip-triggers "
+                    }
+                    else if(document.getElementsByName("trigers_1")[0].checked){
+                        mydumper_1+=" -G "
+                    }
+                    if(events==1) { mysqldump_1+=" --events "; mydumper_1+=" --events "}
+                    if(cols==1) {mysqldump_1+=" --complete-insert " ; mydumper_1+=" --complete-insert " }
+                    if(quick==1) mysqldump_1+=" --skip-quick "
+                    if(!drop_ddl==1 && document.getElementsByName("drop_ddl_1")[0].checked) mysqldump_1+=" --skip-add-drop-table "
+                    if(document.getElementsByName("tz_utc")[1].checked && document.getElementsByName("tz_utc_1")[0].checked){
+                        mysqldump_1+=" --skip-tz-utc "
+                        mydumper_1+=" --skip-tz-utc "
+                    }
+                    if(document.getElementsByName("views")[1].checked && document.getElementsByName("views_1")[0].checked){
+                        mydumper_1+=" --no-views "
+                    }
+                }
+
+                if(!!custom_parameter){ mydumper_1+=" "+custom_parameter; mysqldump_1+=" "+custom_parameter }
+
+                if(compression==1){
+                    mydumper_1+=" -c -o mydumperBYddcw_"+timestamp_format+" -L mydumperBYddcw_"+timestamp_format+".log "
+                    mysqldump_1+=" | gzip > mysqldumpBYddcw_"+timestamp_format+".sql.gz"
+                }
+                else{
+                    mydumper_1+=" -o mydumperBYddcw_"+timestamp_format+" -L mydumperBYddcw_"+timestamp_format+".log "
+                    mysqldump_1+=" > mysqldumpBYddcw_"+timestamp_format+".sql"
+
+                }
+                mydumper_2+=" -o -d mydumperBYddcw_"+timestamp_format
+                mysqldump_2+=" < mysqldumpBYddcw_"+timestamp_format+".sql"
+
+                document.getElementById("export1").innerHTML=mysqldump_1
+                document.getElementById("import1").innerHTML=mysqldump_2
+                document.getElementById("export2").innerHTML=mydumper_1
+                document.getElementById("import2").innerHTML=mydumper_2
+            }
+            else if (dbtype=="ORACLE"){
+                expdp="expdp "+username+"/"+password+"@"+host+":"+port+"/"+servicename+" DIRECTORY="+oracle_dir+" "
+                impdp="impdp "+username+"/"+password+"@"+host+":"+port+"/"+servicename+" DIRECTORY="+oracle_dir+" "
+                exp="exp "+username+"/"+password+"@"+host+":"+port+"/"+servicename+" "
+                imp="imp "+username+"/"+password+"@"+host+":"+port+"/"+servicename+" "
+                document.getElementById("attach1").innerHTML=expdp+" attach=expdpBYddcw_"+timestamp_format
+                document.getElementById("attach2").innerHTML=impdp+" attach=impdpBYddcw_"+timestamp_format
+                if(!!schema){
+                    schema=schema.replace(/;/g,' ')
+                    schema=schema.replace(/,/g,' ')
+                    schema_arr=schema.split(/\s+/)
+                    expdp+=" schemas="+schema_arr.join(",")+" "
+                    impdp+=" schemas="+schema_arr.join(",")+" "
+                    exp+=" owner="+schema_arr.join(",")+" "
+                    imp+=" fromuser="+schema_arr.join(",")+" touser="+schema_arr.join(",")+" "
+                }
+                else{
+                    expdp+=" full=y "
+                    exp+=" full=y "
+                    imp+=" full=y "
+                }
+                if(!!table_name){
+                    table_name=table_name.replace(/;/g,' ')
+                    table_name=table_name.replace(/,/g,' ')
+                    table_name_arr=table_name.split(/\s+/)
+                    expdp+=" tables="+table_name_arr.join(",")+" "
+                    impdp+=" tables="+table_name_arr.join(",")+" "
+                    exp+=" tables="+table_name_arr.join(",")+" "
+                    imp+=" tables="+table_name_arr.join(",")+" "
+                }
+                if(compression==1 ){
+                    expdp+=" COMPRESSION=ALL "
+                }
+                if(ExtraParameter==1){
+                    if(!!parallel && document.getElementsByName("parallel_1")[0].checked){expdp+=" parallel="+parallel+" "}
+                    if(document.getElementById("remap_tablespace").value.replace(/^\s*|\s*$/g,"").length>0 && document.getElementsByName("remap_tablespace_1")[0].checked){
+                        impdp+=" remap_tablespace="+document.getElementById("remap_tablespace").value.replace(/^\s*|\s*$/g,"")+" "
+                    }
+                    if(document.getElementById("remap_table").value.replace(/^\s*|\s*$/g,"").length>0 && document.getElementsByName("remap_table_1")[0].checked){
+                        impdp+=" remap_table="+document.getElementById("remap_table").value.replace(/^\s*|\s*$/g,"")+" "
+                    }
+                    if(document.getElementById("remap_schema").value.replace(/^\s*|\s*$/g,"").length>0 && document.getElementsByName("remap_schema_1")[0].checked){
+                        impdp+=" remap_schema="+document.getElementById("remap_schema").value.replace(/^\s*|\s*$/g,"")+" "
+                    }
+                    if(document.getElementById("query").value.replace(/^\s*|\s*$/g,"").length>0 && document.getElementsByName("query_1")[0].checked){
+                        expdp+=" query="+document.getElementById("query").value.replace(/^\s*|\s*$/g,"")+" "
+                    }
+                    if(document.getElementsByName("estimate_only")[1].checked && document.getElementsByName("estimate_only_1")[0].checked){ expdp+=" estimate_only=y estimate=blocks " }
+                    if(document.getElementsByName("estimate_only")[2].checked && document.getElementsByName("estimate_only_1")[0].checked){ expdp+=" estimate_only=y estimate=statistics " }
+                    if(document.getElementsByName("exists")[1].checked && document.getElementsByName("exists_1")[0].checked){ impdp+=" TABLE_EXISTS_ACTION=APPEND " }
+                    if(document.getElementsByName("exists")[2].checked && document.getElementsByName("exists_1")[0].checked){ impdp+=" TABLE_EXISTS_ACTION=REPLACE " }
+                    if(document.getElementsByName("exists")[3].checked && document.getElementsByName("exists_1")[0].checked){ impdp+=" TABLE_EXISTS_ACTION=TRUNCATE " }
+                }
+                if(!!custom_parameter){ expdp+=" "+custom_parameter; exp+=" "+custom_parameter }
+
+                expdp+=" JOB_NAME=expdpBYddcw_"+timestamp_format+" DUMPFILE=expdpBYddcw_"+timestamp_format+".dmp LOGFILE=expdpBYddcw_"+timestamp_format+".log"
+                impdp+=" JOB_NAME=impdpBYddcw_"+timestamp_format+" DUMPFILE=expdpBYddcw_"+timestamp_format+".dmp LOGFILE=expdpBYddcw_"+timestamp_format+".log"
+                exp+=" FILE=expBYddcw_"+timestamp_format+".dmp LOG=expBYddcw_"+timestamp_format+".log buffer=65536 feedback=100000"
+                imp+=" FILE=expBYddcw_"+timestamp_format+".dmp LOG=expBYddcw_"+timestamp_format+".log buffer=65536 feedback=100000 commit=y ignore=y"
+
+                document.getElementById("export1").innerHTML=expdp
+                document.getElementById("import1").innerHTML=impdp
+                document.getElementById("export2").innerHTML=exp
+                document.getElementById("import2").innerHTML=imp
+            }
+            else if (dbtype=="POSTGRESQL"){
+                alert("作者PG不太熟, 还请大佬完善")
+                pgdump="export PGPASSWORD="+password+"\n pg_dump -h "+host+" -p "+port+" -U "+username+" "
+                pgrestore="export PGPASSWORD="+password+"\n pg_restore -h "+host+" -p "+port+" -U "+username+" "
+                if(!!dbname) pgdump+=" -d "+dbname+" "
+                if(!!table_name){
+                     table_name=table_name.replace(/;/g,' ')
+                     table_name=table_name.replace(/,/g,' ')
+                     table_name_arr=table_name.split(/\s+/)
+                     for (x in table_name_arr){
+                        pgdump+=" -t "+table_name_arr[x]+" "
+                     }
+                }
+                if(compression==1){ pgdump+=" -Z 2 " }
+                if(ExtraParameter==1){
+                    if (!!parallel && document.getElementsByName("parallel_1")[0].checked){
+                        pgdump+=" -j "+parallel+" "
+                    }
+                    if(cols==1){pgdump+=" --column-inserts "}
+
+                }
+                if(!!custom_parameter){ pgdump+=" "+custom_parameter;  }
+                pgdump+=" -Fp > pgdumpBYddcw_"+timestamp_format+".sql "
+                pgrestore+=" < pgdumpBYddcw_"+timestamp_format+".sql "
+                document.getElementById("export1").innerHTML=pgdump
+                document.getElementById("import1").innerHTML=pgrestore
+            }
+        }
+
+        //复制
+        function copyCode(a){
+            var code=document.getElementById(a)
+            code.select()
+            document.execCommand("Copy")
+            alert("已复制 "+code.value)
+        }
+
+        //鼠标滑上去显示颜色  a 表示第几个.   b 表示背景颜色  c表示字体颜色
+        function changeBG(a,b,c){
+            var im="import"+a
+            var ex="export"+a
+            document.getElementById(im).style.backgroundColor=b;
+            document.getElementById(im).style.color=c
+            document.getElementById(ex).style.backgroundColor=b;
+            document.getElementById(ex).style.color=c
+        }
+
+        //a 1表示导出   2表示导入的   b背景颜色  c字体颜色
+        function changeBG2(a,b,c){
+            if(a==1) attach_="export1"
+            if(a==2) attach_="import1"
+            attach="attach"+a
+            document.getElementById(attach).style.backgroundColor=b;
+            document.getElementById(attach).style.color=c
+            document.getElementById(attach_).style.backgroundColor=b;
+            document.getElementById(attach_).style.color=c
+        }
+
+
+    </script>
+<body>
+<div style=";width: 888px;height: 360px;margin: 0px auto;padding-top: 10px" align="center" id="aa">
+        <div style="background-color: white;opacity: 0.75;width: 688px;height: 370px;margin-left: 100px;z-index: 0;position: absolute"></div>
+        <table align="center" style="z-index: 1;position: absolute;margin-top: 50px;margin-left: 235px"id="dbinfo">
+            <tr>
+                <td align="right"><span>数据库类型</span></td>
+                <td>
+                    <select class="input1" onclick="onc(0)" onchange="onb(0)" id="i0">
+                        <option value="MYSQL">MYSQL</option>
+                        <option value="ORACLE">ORACLE</option>
+                        <option value="POSTGRESQL">POSTGRESQL</option>
+                    </select>
+                </td>
+                <td><div style="display: none;"id="t0">选择数据库类型</div></td>
+            </tr>
+            <tr>
+                <td align="right"><span>主机地址</span></td>
+                <td><input type="text" class="input1" value="127.0.0.1" id="host"></td>
+                <td><div style="display:none;"></div> </td>
+            </tr>
+            <tr>
+                <td align="right"><span>主机端口</span></td>
+                <td><input type="number" class="input1" min="1024" max="65535" value="3306" id="port"></td>
+            </tr>
+            <tr>
+                <td align="right"><span>用户名</span></td>
+                <td><input type="text" class="input1"  id="username" value="ddcw"></td>
+            </tr>
+            <tr>
+                <td align="right"><span>密码</span></td>
+                <td><input type="password" class="input1" value="123456" id="password" ></td>
+            </tr>
+            <tr>
+                <td align="right"><span id="dbname_value">数据库名</span></td>
+                <td><input type="text" class="input2" onclick="onc(1)" onblur="onb(1)" id="i1"></td>
+                <td><div style="display: none;"id="t1">数据库名字之间用分号(;)或者逗号(,)隔开</div></td>
+            </tr>
+            <tr id="schema" style="display:none">
+                <td align="right"><span>SCHEMA(用户)</span></td>
+                <td><input type="text" class="input2" onclick="onc(5)" onblur="onb(5)" id="i5" values="ddcw"></td>
+                <td><div style="display: none;"id="t5">多个之间用分号(;)逗号(,)空格( )隔开</div></td>
+            </tr>
+            <tr>
+                <td align="right"><span>表名</span></td>
+                <td><input type="text" class="input2" onclick="onc(2)" onblur="onb(2)" id="i2"></td>
+                <td><div style="display: none;"id="t2">表名字之间用分号(;)或者逗号(,)隔开</div></td>
+            </tr>
+            <tr id="oracle_dir" style="display:none">
+                <td align="right"><span>目录</span></td>
+                <td><input type="text" class="input2" onclick="onc(4)" onblur="onb(4)" id="i4" values="DataPump_Dir"></td>
+                <td><div style="display: none;"id="t4">select * from dba_directories;</div></td>
+            </tr>
+            <tr>
+                <td align="right"><span>自定义参数</span></td>
+                <td><input type="text" class="input2" onclick="onc(3)" onblur="onb(3)" id="i3"></td>
+                <td><div style="display: none;"id="t3">自定义参数</div></td>
+            </tr>
+            <tr>
+                <td align="right"><span>是否亚索</span></td>
+                <td><input type="radio" name="compression" value="YES">是<input type="radio" name="compression" value="NO" checked="checked">否</td>
+            </tr>
+            <tr>
+                <td align="right"><span></span></td>
+                <td>
+                    <button type="button" class="btn btn-secondary" onclick=showMore() id="moreExtraParameter">展开高级选项</button>
+<!--                    显示某种数据库的高级选项-->
+                </td>
+                <td><button type="button" onclick=set_radios() id="check_radio" style="display:none">全部禁用</button></td>
+            </tr>
+<!--            高级选项, 获取值的时候通过class获取 高级选项必须打开, 才会获取高级选项的值-->
+             <tr class="ExtraParameter MYSQL ORACLE POSTGRESQL" style="display:none">
+                <td align="right"><span>并行度</span></td>
+                <td><input type="number" id="parallel" min="1" max="128" value="2"></td>
+                <td>是否启用:<input class="check_radio" type="radio" name="parallel_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="parallel_1" value="NO">否</td>
+             </tr>
+            <tr class="ExtraParameter MYSQL" style="display:none">
+                <td align="right"><span>只要DDL</span></td>
+                <td><input type="radio" name="no_data" >是<input type="radio" name="no_data" checked="checked">否</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="no_data_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="no_data_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter MYSQL" style="display:none">
+                <td align="right"><span>只要数据</span></td>
+                <td><input type="radio" name="no_ddl" >是<input type="radio" name="no_ddl" checked="checked">否</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="no_ddl_1" checked="checked" value="YES">是<input  class="check_radio" type="radio" name="no_ddl_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter ORACLE" style="display:none">
+                <td align="right"><span>仅估计</span></td>
+                <td><input type="radio" name="estimate_only" checked="checked">否<input type="radio" name="estimate_only" value="blocks">blocks<input type="radio" name="estimate_only" value="statistics">statistics</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="estimate_only_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="estimate_only_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter MYSQL" style="display:none">
+                <td align="right"><span>含GTID信息</span></td>
+                <td><input type="radio" name="gtid" checked="checked" value="YES">是<input type="radio" name="gtid" value="NO">否</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="gtid_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="gtid_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter MYSQL" style="display:none">
+                <td align="right"><span>含存储过程</span></td>
+                <td><input type="radio" name="routins"  value="YES">是<input type="radio" name="routins" checked="checked" value="NO">否</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="routins_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="routins_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter MYSQL" style="display:none">
+                <td align="right"><span>含触发器</span></td>
+                <td><input type="radio" name="trigers" checked="checked" value="YES">是<input type="radio" name="trigers" value="NO">否</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="trigers_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="trigers_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter MYSQL" style="display:none">
+                <td align="right"><span>含事件</span></td>
+                <td><input type="radio" name="events" value="YES">是<input type="radio" name="events" checked="checked" value="NO">否</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="events_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="events_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter MYSQL POSTGRESQL" style="display:none">
+                <td align="right"><span>含字段名(TDSQL)</span></td>
+                <td><input type="radio" name="cols" value="YES">是<input type="radio" checked="checked" name="cols" value="NO">否</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="cols_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="cols_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter MYSQL" style="display:none">
+                <td align="right"><span>缓存查询</span></td>
+                <td><input type="radio" name="quick" value="YES">是<input type="radio" checked="checked" name="quick" value="NO">否</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="quick_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="quick_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter MYSQL" style="display:none">
+                <td align="right"><span>含删除DDL</span></td>
+                <td><input type="radio" name="drop_ddl" checked="checked" value="YES">是<input type="radio"  name="drop_ddl" value="NO">否</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="drop_ddl_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="drop_ddl_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter MYSQL" style="display:none">
+                <td align="right"><span>tz-utc</span></td>
+                <td><input type="radio" name="tz_utc" checked="checked" value="YES">是<input type="radio"  name="tz_utc" value="NO">否</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="tz_utc_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="tz_utc_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter MYSQL" style="display:none">
+                <td align="right"><span>含视图(仅mydumper)</span></td>
+                <td><input type="radio" name="views" value="YES">是<input type="radio"  name="views" checked="checked" value="NO">否</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="views_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="views_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter ORACLE" style="display:none">
+                <td align="right"><span>表空间替换(导入)</span></td>
+                <td><input type="text" id="remap_tablespace" value=""></td>
+                <td>是否启用:<input class="check_radio" type="radio" name="remap_tablespace_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="remap_tablespace_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter ORACLE" style="display:none">
+                <td align="right"><span>schema替换(导入)</span></td>
+                <td><input type="text" id="remap_schema" value=""></td>
+                <td>是否启用:<input class="check_radio" type="radio" name="remap_schema_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="remap_schema_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter ORACLE" style="display:none">
+                <td align="right"><span>table替换(导入)</span></td>
+                <td><input type="text" id="remap_table" value=""></td>
+                <td>是否启用:<input class="check_radio" type="radio" name="remap_table_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="remap_table_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter ORACLE" style="display:none">
+                <td align="right"><span>QUERY</span></td>
+                <td><input type="text" id="query" value=""></td>
+                <td>是否启用:<input class="check_radio" type="radio" name="query_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="query_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter ORACLE" style="display:none">
+                <td align="right"><span>存在咋办(导入)</span></td>
+                <td><input type="radio" name="exists" checked="checked">SKIP<input type="radio" name="exists">APPEND<input type="radio" name="exists">REPLACE<input type="radio" name="exists">TRUNCATE</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="exists_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="exists_1" value="NO">否</td>
+            </tr>
+            <tr>
+                <td></td>
+                <td>
+                <div style="width: 170px;height: 30px;background-color: #98bf21;" align="center" onclick="getCOMMAND()">
+                    <span style="color: white;font-weight: 700;font-size: 20px" >生成</span>
+                </div>
+                </td>
+            </tr>
+            <tr>
+                <td>导出语句</td>
+                <td>
+                    <table border="1" style="border-color:#b6ff00">
+                        <tr onmouseover="changeBG('1','#ff0','#DC143C')" onmouseout="changeBG('1','#fff', '#000')">
+                            <td><input type="button" onclick="copyCode('export1')" value="点击复制"></td>
+                            <td><textarea id="export1" cols="50"></textarea></td>
+                        </tr>
+                        <tr onmouseover="changeBG('2','#ff0','#DC143C')" onmouseout="changeBG('2','#fff', '#000')">
+                            <td><input type="button" onclick="copyCode('export2')" value="点击复制"></td>
+                            <td><textarea id="export2" cols="50"></textarea></td>
+                        </tr>
+                    </table>
+            </tr>
+            <tr>
+                <td>导入语句</td>
+                <td>
+                    <table border="1" style="border-color:#b6ff00">
+                        <tr onmouseover="changeBG('1','#ff0','#DC143C')" onmouseout="changeBG('1','#fff', '#000')">
+                            <td><input type="button" onclick="copyCode('import1')" value="点击复制"></td>
+                            <td><textarea id="import1" cols="50"></textarea> </td>
+                        </tr>
+                        <tr onmouseover="changeBG('2','#ff0','#DC143C')" onmouseout="changeBG('2','#fff', '#000')">
+                            <td><input type="button" onclick="copyCode('import2')" value="点击复制"></td>
+                            <td><textarea id="import2" cols="50"></textarea> </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+            <tr id="attach" style="display:none">
+                <td>查看状态</br>(仅expdp/impdp)</td>
+                <td>
+                    <table border="1" style="border-color:#b6ff00">
+                        <tr onmouseover="changeBG2('1','#008000','#DC143C')" onmouseout="changeBG2('1','#fff', '#000')">
+                            <td><input type="button" onclick="copyCode('attach1')" value="点击复制"></td>
+                            <td><textarea id="attach1" cols="50"></textarea> </td>
+                        </tr>
+                        <tr onmouseover="changeBG2('2','#008000','#DC143C')" onmouseout="changeBG2('2','#fff', '#000')">
+                            <td><input type="button" onclick="copyCode('attach2')" value="点击复制"></td>
+                            <td><textarea id="attach2" cols="50"></textarea> </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+</br>
+
+
+</body>
+</head>
+</html>
