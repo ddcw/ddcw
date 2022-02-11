@@ -17,8 +17,14 @@
     </style>
     <script type="text/javascript">
         console.log("最新地址: https://github.com/ddcw/ddcw/tree/master/html/GetImportExportCommand.html")
-        console.log("博客地址: https://cloud.tencent.com/developer/user/1130242")
+        console.log("社区地址: https://cloud.tencent.com/developer/user/1130242")
         console.log("个人网站: https://www.itddcw.com")
+        console.log("mysql支持 mysqldump 和 mydumper/myloader")
+        console.log("oracle支持expdp/exp  数据泵导出时仅支持按照全库,schema,表中的某一种方式导出 有schema的时候,忽略表")
+        console.log("pg仅支持pg_dump/pg_resotre (PG我不熟....)")
+        console.log("change log: ")
+        console.log("2022.02.11 BY DDCW 修复GTID参数BUG  现在可以正常选用是否导出gtid")
+        console.log("2022.02.11 BY DDCW 增加ORACLE可选多个dump文件, 也就是加上%U, 多个文件同时写会快一些.  还加了固定参数cluster=no")
         var ExtraParameter=0  //额外参数 0 表示隐藏   1 表示展开 只有展开的时候 才会考虑是否启用该参数
         var set_radio=0 // 额外参数启用还是禁用 0 表示全部启用  1表示全部禁用
        //alert(document.getElementsByName("ExtraParameter").innerHTML)
@@ -216,7 +222,7 @@
                     }
                     if(no_data==1 ){ mysqldump_1=mysqldump_1+" -d ";mydumper_1+=" -d "}
                     if(no_ddl==1 ) {mysqldump_1=mysqldump_1+" -t "; mydumper_1+=" -m "}
-                    if(!gtid==1 && gtid!=0) mysqldump_1=mysqldump_1+" --set-gtid-purged=off "
+                    if(!gtid==1 && document.getElementsByName("gtid_1")[0].checked) mysqldump_1=mysqldump_1+" --set-gtid-purged=off "
                     if(routins==1) {mysqldump_1+=" --routines "; mydumper_1+=" --routines " }
                     if(!trigers==1 && document.getElementsByName("trigers_1")[0].checked){
                         mysqldump_1+=" --skip-triggers "
@@ -263,7 +269,7 @@
                 imp="imp "+username+"/"+password+"@"+host+":"+port+"/"+servicename+" "
                 document.getElementById("attach1").innerHTML=expdp+" attach=expdpBYddcw_"+timestamp_format
                 document.getElementById("attach2").innerHTML=impdp+" attach=impdpBYddcw_"+timestamp_format
-                if(!!schema){
+                if(!!schema ){
                     schema=schema.replace(/;/g,' ')
                     schema=schema.replace(/,/g,' ')
                     schema_arr=schema.split(/\s+/)
@@ -272,12 +278,12 @@
                     exp+=" owner="+schema_arr.join(",")+" "
                     imp+=" fromuser="+schema_arr.join(",")+" touser="+schema_arr.join(",")+" "
                 }
-                else{
+                else if(!table_name){
                     expdp+=" full=y "
                     exp+=" full=y "
                     imp+=" full=y "
                 }
-                if(!!table_name){
+                if(!!table_name && !schema){
                     table_name=table_name.replace(/;/g,' ')
                     table_name=table_name.replace(/,/g,' ')
                     table_name_arr=table_name.split(/\s+/)
@@ -308,11 +314,19 @@
                     if(document.getElementsByName("exists")[1].checked && document.getElementsByName("exists_1")[0].checked){ impdp+=" TABLE_EXISTS_ACTION=APPEND " }
                     if(document.getElementsByName("exists")[2].checked && document.getElementsByName("exists_1")[0].checked){ impdp+=" TABLE_EXISTS_ACTION=REPLACE " }
                     if(document.getElementsByName("exists")[3].checked && document.getElementsByName("exists_1")[0].checked){ impdp+=" TABLE_EXISTS_ACTION=TRUNCATE " }
+                    if(document.getElementsByName("dumpU")[0].checked && document.getElementsByName("dumpU_1")[0].checked && parallel>1){
+                        expdp+=" DUMPFILE=expdpBYddcw_"+timestamp_format+"_%U.dmp"
+                        impdp+=" DUMPFILE=expdpBYddcw_"+timestamp_format+"_%U.dmp"
+                    }
+                    else{
+                        expdp+=" DUMPFILE=expdpBYddcw_"+timestamp_format+".dmp"
+                        impdp+=" DUMPFILE=expdpBYddcw_"+timestamp_format+".dmp"
+                    }
                 }
                 if(!!custom_parameter){ expdp+=" "+custom_parameter; exp+=" "+custom_parameter }
 
-                expdp+=" JOB_NAME=expdpBYddcw_"+timestamp_format+" DUMPFILE=expdpBYddcw_"+timestamp_format+".dmp LOGFILE=expdpBYddcw_"+timestamp_format+".log"
-                impdp+=" JOB_NAME=impdpBYddcw_"+timestamp_format+" DUMPFILE=expdpBYddcw_"+timestamp_format+".dmp LOGFILE=expdpBYddcw_"+timestamp_format+".log"
+                expdp+=" CLUSTER=NO JOB_NAME=expdpBYddcw_"+timestamp_format+" LOGFILE=expdpBYddcw_"+timestamp_format+".log"
+                impdp+=" JOB_NAME=impdpBYddcw_"+timestamp_format+" LOGFILE=expdpBYddcw_"+timestamp_format+".log"
                 exp+=" FILE=expBYddcw_"+timestamp_format+".dmp LOG=expBYddcw_"+timestamp_format+".log buffer=65536 feedback=100000"
                 imp+=" FILE=expBYddcw_"+timestamp_format+".dmp LOG=expBYddcw_"+timestamp_format+".log buffer=65536 feedback=100000 commit=y ignore=y"
 
@@ -540,6 +554,11 @@
                 <td align="right"><span>存在咋办(导入)</span></td>
                 <td><input type="radio" name="exists" checked="checked">SKIP<input type="radio" name="exists">APPEND<input type="radio" name="exists">REPLACE<input type="radio" name="exists">TRUNCATE</td>
                 <td>是否启用:<input class="check_radio" type="radio" name="exists_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="exists_1" value="NO">否</td>
+            </tr>
+            <tr class="ExtraParameter ORACLE" style="display:none">
+                <td align="right"><span>多个dump文件(parallel)</span></td>
+                <td><input type="radio" name="dumpU" >是<input type="radio" name="dumpU" checked="checked">否</td>
+                <td>是否启用:<input class="check_radio" type="radio" name="dumpU_1" checked="checked" value="YES">是<input class="check_radio" type="radio" name="dumpU_1" value="NO">否</td>
             </tr>
             <tr>
                 <td></td>
