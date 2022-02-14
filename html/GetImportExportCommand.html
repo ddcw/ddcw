@@ -25,6 +25,7 @@
         console.log("change log: ")
         console.log("2022.02.11 BY DDCW 修复GTID参数BUG  现在可以正常选用是否导出gtid")
         console.log("2022.02.11 BY DDCW 增加ORACLE可选多个dump文件, 也就是加上%U, 多个文件同时写会快一些.  还加了固定参数cluster=no")
+        console.log("2022.02.14 BY DDCW PG生成导出命令的时候, 会把第二个命令清空, 使更好看")
         var ExtraParameter=0  //额外参数 0 表示隐藏   1 表示展开 只有展开的时候 才会考虑是否启用该参数
         var set_radio=0 // 额外参数启用还是禁用 0 表示全部启用  1表示全部禁用
        //alert(document.getElementsByName("ExtraParameter").innerHTML)
@@ -361,6 +362,8 @@
                 pgrestore+=" < pgdumpBYddcw_"+timestamp_format+".sql "
                 document.getElementById("export1").innerHTML=pgdump
                 document.getElementById("import1").innerHTML=pgrestore
+                document.getElementById("export2").innerHTML=""
+                document.getElementById("import2").innerHTML=""
             }
         }
 
