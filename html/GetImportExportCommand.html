@@ -26,6 +26,7 @@
         console.log("2022.02.11 BY DDCW 修复GTID参数BUG  现在可以正常选用是否导出gtid")
         console.log("2022.02.11 BY DDCW 增加ORACLE可选多个dump文件, 也就是加上%U, 多个文件同时写会快一些.  还加了固定参数cluster=no")
         console.log("2022.02.14 BY DDCW PG生成导出命令的时候, 会把第二个命令清空, 使更好看")
+        console.log("2022.02.17 BY DDCW 导出单个库下mysql表的时候, 导入语句指定数据库  亚索-->压缩")
         var ExtraParameter=0  //额外参数 0 表示隐藏   1 表示展开 只有展开的时候 才会考虑是否启用该参数
         var set_radio=0 // 额外参数启用还是禁用 0 表示全部启用  1表示全部禁用
        //alert(document.getElementsByName("ExtraParameter").innerHTML)
@@ -186,6 +187,7 @@
                     dbname=dbname.replace(/,/g,' ')
                     mysqldump_1=mysqldump_1+" --databases " + dbname
                     dbname_arr=dbname.split(/\s+/)
+                    if(dbname_arr.length==1 && !!table_name) mysqldump_2+=" -D "+dbname_arr[0]+" "
                     //mydumper导出多个库 得写正则表达式.. 比如  -x '^(db1\.|db3\.|db2\.)'
                     if(dbname_arr.length>1){
                         for (x in dbname_arr){
@@ -456,7 +458,7 @@
                 <td><div style="display: none;"id="t3">自定义参数</div></td>
             </tr>
             <tr>
-                <td align="right"><span>是否亚索</span></td>
+                <td align="right"><span>是否压缩</span></td>
                 <td><input type="radio" name="compression" value="YES">是<input type="radio" name="compression" value="NO" checked="checked">否</td>
             </tr>
             <tr>
