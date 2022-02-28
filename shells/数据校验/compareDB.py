@@ -39,6 +39,8 @@ COMPARE_ROWS=int(config.get('DATA','COMPARE_ROWS'))
 #SOURCE_SQL="select id,name from t1 where id>10;"
 #TARGET_SQL="select id,name from t1 where id>10;"
 
+TWO_COMPARE_INTERAL_TIME=int(config.get('DATA','TWO_COMPARE_INTERAL_TIME'))
+
 
 def get_engine(db):
 	if db[0:5] == 'MYSQL' or db[0:11] == 'TDSQL-MYSQL' or db[0:5] == 'HOTDB':
@@ -132,6 +134,7 @@ if TWO_COMPARE == "1" and len(data_inconsistency) > 0 :
 	print("第一次对比不一致的行数为: {n}".format(n=len(data_inconsistency)))
 	print("\n\n")
 	print("正在进行第二次比较")
+	time.sleep(TWO_COMPARE_INTERAL_TIME)
 	
 	if round(len(data_inconsistency)) < round(df_source_len/100*COMPARE_PERSENT) and round(len(data_inconsistency)) < COMPARE_ROWS :
 		#print("开始跑多线程 ",PROCESS_COUNT)
