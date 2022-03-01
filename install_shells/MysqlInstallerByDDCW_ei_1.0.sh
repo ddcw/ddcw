@@ -22,6 +22,9 @@
 #官方教程: https://dev.mysql.com/doc/refman/5.7/en/installing-source-distribution.html
 #个人视频教程: https://www.bilibili.com/video/BV1bL4y1h7Fi
 
+#changelog
+#2022.03.01  修复多版本之间共用一个mysqlbase的问题, mysqld_safe添加 --basedir=xx --datadir=xx
+
 
 
 stty erase ^H
@@ -915,7 +918,7 @@ init_mysql() {
 	sed -i "/^datadir/cdatadir=${MYSQL_DATA_DIR}" /etc/init.d/mysqld_${MYSQL_PORT} >>${details} 2>&1
 	sed -i "/^lockdir/clockdir=${MYSQL_PID%/*}" /etc/init.d/mysqld_${MYSQL_PORT} >>${details} 2>&1
 	sed -i "/^mysqld_pid_file_path/cmysqld_pid_file_path=${MYSQL_PID}" /etc/init.d/mysqld_${MYSQL_PORT} >>${details} 2>&1
-	sed -i "/mysqld_safe --datadir=/cnohup ./bin/mysqld_safe --defaults-file=${MYSQL_CNF} --user=${MYSQL_USER} >>${MYSQL_LOG_DIR}/nohup.out &" /etc/init.d/mysqld_${MYSQL_PORT}
+	sed -i "/mysqld_safe --datadir=/cnohup ./bin/mysqld_safe --defaults-file=${MYSQL_CNF} --basedir=${MYSQL_BASE_DIR%/}/mysql --datadir=${MYSQL_DATA_DIR}  --user=${MYSQL_USER} >>${MYSQL_LOG_DIR}/nohup.out &" /etc/init.d/mysqld_${MYSQL_PORT}
 	echo_color detail "配置mysql_${MYSQL_PORT}成功 即将启动mysql服务: /etc/init.d/mysqld_${MYSQL_PORT} start" ${details}
 	systemctl daemon-reload  >>${details} 2>&1
 	/etc/init.d/mysqld_${MYSQL_PORT} start >>${details} 2>&1
