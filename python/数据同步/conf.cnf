@@ -1,0 +1,52 @@
+[producer]
+dbtype=mysql #目前只支持mysql
+host=127.0.0.1
+port=3332
+user=root
+password=123456
+
+#schema和表信息配置, 默认全部
+only_schemas="db1,db2," #只抽取的schema
+only_tables="aa,bb," #仅抽取的表
+ignored_schemas="" #忽略的schema
+ignored_tables="" #忽略的表
+
+#ignored_events="" #忽略的事件类型, 取值 DeleteRowsEvent,UpdateRowsEvent,WriteRowsEvent
+
+#作为从库的server_id, 随便写,不冲突就行
+server_id=1234321  
+
+#开始位置, 如果kafka里面有记录, 则此参数不生效
+#log_file=""
+#log_pos="" 
+
+ddl=true #开启DDL, 默认开启 (不支持自动建表, 所有如果没有开启DDL的话, 源端新增表, 目标也得手动设置,  DDL转换(TODO))
+
+
+
+[consumer]
+#可选mysql, oracle, postgresql
+dbtype=mysql
+host=127.0.0.1
+port=3332
+user=root
+password=123456
+#记录已经提交了的数据信息, 类似于日志, 下次启动的时候, 就根据这里面的记录继续.为空就表示重新开始 数据结构为 offset xid
+dbfile=consumer.db
+#schema转换, 默认和源schema一致
+remap_schema={"db1":"testdb1","db2":"testdb2"}
+#表转换  默认和源table名字一样
+remap_table={"t1":"test1","t2":"test2"}
+#time_1="col_dump_time"  #抽取数据的时间 记录在 col_dump_time 字段上, 这个时间就是kafka的timestamp
+#time_2="col_dump_dml"   #更改数据的时间 记录在 col_dump_dml 字段上,  这个时间就是insert/update的当前时间
+#dml_flag="col_dml"  #记录这行数据的操作是insert还是update, 类型为int(1)   0 insert, 1 update,  2 delete (只有设置了delete_flag才生效)
+#delete_flag=0  # 1表示直接删除数据, 1表示只设置标记,不删除数据
+
+
+[kafka]
+topic=tp3
+bootstrap_servers=192.168.101.51:9092,192.168.101.51:9093,192.168.101.51:9094
+#第0个partition记录数据, 第1个partition记录binlog信息,所以得要两个partition 方便下次启动的时候, 继续抽取日志
+#创建topic命令参考 /u01/kafka/bin/kafka-topics.sh --create --zookeeper 192.168.101.51:2181 --replication-factor 1 --partitions 2 --topic tp2
+
+#生产者和消费者可以分开, kafka配置信息都得有
