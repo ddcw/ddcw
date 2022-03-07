@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#write by ddcw at 2021.09.26
+#write by ddcw at 2021.10.06
 #本脚本采用源码编译安装openssl的方式. 
 
 #openssl下载地址: https://www.openssl.org/source/old/1.0.2/openssl-1.0.2u.tar.gz
