@@ -5,6 +5,9 @@ import os
 import json
 import time
 import pickle
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 
 config = configparser.ConfigParser()
 config.read('conf.cnf')
@@ -16,9 +19,25 @@ host=str(config.get('consumer','host'))
 port=int(config.get('consumer','port'))
 user=str(config.get('consumer','user'))
 password=str(config.get('consumer','password'))
+service_name=str(config.get('consumer','service_name'))
 
 remap_schema_rule=json.loads(config.get('consumer','remap_schema'))
 remap_table_rule=json.loads(config.get('consumer','remap_table'))
+
+def get_engine():
+	if dbtype == 'mysql' :
+		engine = create_engine('mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}'.format(db_host=host, db_port=port, db_user=user, db_password=password, ))
+	elif dbtype == 'oracle':
+		engine = create_engine('oracle+cx_oracle://{db_user}:{db_password}@{db_host}:{db_port}/?service_name={db_servername}'.format(db_host=host, db_port=port, db_user=user, db_password=password, db_servername=service_name))
+	elif dbtype == "postgresql":
+		engine = create_engine('postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'.format(db_host=host, db_port=port, db_user=user, db_password=password, ))
+	else:
+		engine = "暂时不支持其它类型的数据库"
+		return False
+	return engine
+
+engine=get_engine()
+session = sessionmaker(bind=engine)()
 
 
 fd = os.open(dbfile,os.O_WRONLY | os.O_CREAT)
@@ -118,41 +137,53 @@ def get_values(obj):
 
 
 sql=""
+session.begin()
 for msg in consumer:
 	TYPE=json.loads(msg.value)["TYPE"]
 	if TYPE == "XID":
 		message={"xid":json.loads(msg.value)["XID"],"offset":msg.offset,"time":time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+		session.commit()
 		f.write(json.dumps(message)+'\n')
 		f.flush()
+		session.begin()
 		sql=""
 	elif TYPE == "INSERT":
 		for mydict in json.loads(msg.value)["DATA"]:
 			schema_table = remap_schema(json.loads(msg.value)["SCHEMA"])+"."+remap_table(json.loads(msg.value)["TABLE"])
 			columns = get_cols(mydict["values"].keys())
 			values = get_values(mydict["values"].values())
-			sql = "INSERT INTO %s ( %s ) VALUES ( %s );" % (schema_table, columns, values)
-			print(sql)
+			sql = "INSERT INTO %s ( %s ) VALUES ( %s )" % (schema_table, columns, values)
+			session.execute(sql)
+			#print(sql)
 	elif TYPE == "DELETE":
 		for mydict in json.loads(msg.value)["DATA"]:
 			schema_table = remap_schema(json.loads(msg.value)["SCHEMA"])+"."+remap_table(json.loads(msg.value)["TABLE"])
 			#where = ' AND '.join(['%s=%s' %(x, mydict["values"][x]) for x in mydict["values"]])
-			where = get_kv(mydict["values"])
-			sql = "DELETE FROM %s WHERE %s ;" %(schema_table, where)
-			print(sql)
+			where = get_kv_and(mydict["values"])
+			sql = "DELETE FROM %s WHERE %s " %(schema_table, where)
+			session.execute(sql)
+			#print(sql)
 	elif TYPE == "UPDATE":
 		for mydict in json.loads(msg.value)["DATA"]:
 			schema_table = remap_schema(json.loads(msg.value)["SCHEMA"])+"."+remap_table(json.loads(msg.value)["TABLE"])
 			columns = get_kv(mydict["after_values"])
 			where = get_kv_and(mydict["before_values"])
-			sql = "UPDATE %s SET %s WHERE %s ;" %(schema_table, columns, where)
-			print(sql)
+			sql = "UPDATE %s SET %s WHERE %s " %(schema_table, columns, where)
+			session.execute(sql)
+			#print(sql)
 	elif TYPE == "DDL":
 		DDL = json.loads(msg.value)["DATA"]
+		schema = remap_schema(json.loads(msg.value)["SCHEMA"])
 		message={"DDL":DDL,"offset":msg.offset,"time":time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())}
+		session.commit()
+		session.execute("use {schema}; ".format(schema=schema,))
+		session.execute(DDL)
+		session.commit()
 		f.write(json.dumps(message)+'\n')
 		f.flush()
 		sql=""
-		print(DDL)
+		session.begin()
+		#print(DDL)
 	else:
 		pass
 

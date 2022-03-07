@@ -26,15 +26,17 @@ ddl=true #开启DDL, 默认开启 (不支持自动建表, 所有如果没有开�
 
 [consumer]
 #可选mysql, oracle, postgresql
-dbtype=mysql
-host=127.0.0.1
-port=3332
-user=root
+dbtype=oracle
+host=192.168.101.19
+port=1521
+user=test
 password=123456
+#服务名, 仅对oracle有效
+service_name=ddcwpdb
 #记录已经提交了的数据信息, 类似于日志, 下次启动的时候, 就根据这里面的记录继续.为空就表示重新开始 数据结构为 offset xid
 dbfile=consumer.db
 #schema转换, 默认和源schema一致
-remap_schema={"db1":"testdb1","db2":"testdb2"}
+remap_schema={"db1":"testdb1","db2":"testdb2","testdb":"test"}
 #表转换  默认和源table名字一样
 remap_table={"t1":"test1","t2":"test2"}
 #time_1="col_dump_time"  #抽取数据的时间 记录在 col_dump_time 字段上, 这个时间就是kafka的timestamp
