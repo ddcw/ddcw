@@ -1,4 +1,4 @@
-#原理
+# 原理
 
 producer 通过日志把数据抽取到 kafka.   partition 0 记录数据, partition1 记录当前的日志号
 
