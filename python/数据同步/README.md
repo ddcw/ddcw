@@ -60,7 +60,7 @@ producer 通过日志把数据抽取到 kafka.   partition 0 记录数据, parti
 
 # 使用说明
 
-配置 conf.cnf 文件 (文件名是固定的)
+配置 conf.cnf 文件 
 
 启动生产者(抽取数据的进程, 目前只支持mysql)
 
@@ -68,7 +68,7 @@ producer 通过日志把数据抽取到 kafka.   partition 0 记录数据, parti
 python producer.py
 ```
 
-启动消费者(目前只是打印SQL到屏幕上)
+启动消费者
 
 ```shell
 python consumer.py

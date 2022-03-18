@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{dbtype}}巡检报告({{author}}) </title>
+<style type="text/css">
+tr:hover   {background-color: yellow;}
+body.awr {font:bold 10pt Arial,Helvetica,Geneva,sans-serif;color:black; background:White;}
+pre.awr  {font:8pt Courier;color:black; background:White;}
+h1.awr   {font:bold 20pt Arial,Helvetica,Geneva,sans-serif;color:#336699;background-color:White;border-bottom:1px solid #cccc99;margin-top:0pt; margin-bottom:0pt;padding:0px 0px 0px 0px;}
+h2.awr   {font:bold 18pt Arial,Helvetica,Geneva,sans-serif;color:#336699;background-color:White;margin-top:4pt; margin-bottom:0pt;}
+h3.awr {font:bold 16pt Arial,Helvetica,Geneva,sans-serif;color:#336699;background-color:White;margin-top:4pt; margin-bottom:0pt;}
+li.awr {font: 8pt Arial,Helvetica,Geneva,sans-serif; color:black; background:White;}
+th.awrnobg {font:bold 8pt Arial,Helvetica,Geneva,sans-serif; color:black; background:White;padding-left:4px; padding-right:4px;padding-bottom:2px}
+th.awrbg {font:bold 8pt Arial,Helvetica,Geneva,sans-serif; color:White; background:#0066CC;padding-left:4px; padding-right:4px;padding-bottom:2px}
+td.awrnc {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:White;vertical-align:top;}
+td.awrc    {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:#FFFFCC; vertical-align:top;}
+td.awrnclb {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:White;vertical-align:top;border-left: thin solid black;}
+td.awrncbb {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:White;vertical-align:top;border-left: thin solid black;border-right: thin solid black;}
+td.awrncrb {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:White;vertical-align:top;border-right: thin solid black;}
+td.awrcrb    {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:#FFFFCC; vertical-align:top;border-right: thin solid black;}
+td.awrclb    {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:#FFFFCC; vertical-align:top;border-left: thin solid black;}
+td.awrcbb    {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:#FFFFCC; vertical-align:top;border-left: thin solid black;border-right: thin solid black;}
+a.awr {font:bold 8pt Arial,Helvetica,sans-serif;color:#663300; vertical-align:top;margin-top:0pt; margin-bottom:0pt;}
+td.awrnct {font:8pt Arial,Helvetica,Geneva,sans-serif;border-top: thin solid black;color:black;background:White;vertical-align:top;}
+td.awrct   {font:8pt Arial,Helvetica,Geneva,sans-serif;border-top: thin solid black;color:black;background:#FFFFCC; vertical-align:top;}
+td.awrnclbt  {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:White;vertical-align:top;border-top: thin solid black;border-left: thin solid black;}
+td.awrncbbt  {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:White;vertical-align:top;border-left: thin solid black;border-right: thin solid black;border-top: thin solid black;}
+td.awrncrbt {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:White;vertical-align:top;border-top: thin solid black;border-right: thin solid black;}
+td.awrcrbt     {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:#FFFFCC; vertical-align:top;border-top: thin solid black;border-right: thin solid black;}
+td.awrclbt     {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:#FFFFCC; vertical-align:top;border-top: thin solid black;border-left: thin solid black;}
+td.awrcbbt   {font:8pt Arial,Helvetica,Geneva,sans-serif;color:black;background:#FFFFCC; vertical-align:top;border-top: thin solid black;border-left: thin solid black;border-right: thin solid black;}
+table.tdiff {  border_collapse: collapse; }
+table.tscl {width: 600;}
+table.tscl tbody, table.tscl thead { display: block; }
+table.tscl thead tr th {height: 12px;line-height: 12px;}
+table.tscl tbody { height: 100px;overflow-y: auto; overflow-x: hidden;}
+table.tscl tbody td, thead th {width: 200;}
+.hidden   {position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;}
+.pad   {margin-left:17px;}
+.doublepad {margin-left:34px;}
+</style>
+    </style>
+</head>
+<body class="awr">
+<h1 class="awr">
+{{dbtype}} {{ host }}:{{port}}
+</h1>
+<p />
+<table border="0" width="600" class="tdiff" summary="数据库基础信息">
+<tr><th class="awrbg" scope="col">数据库类型</th><th class="awrbg" scope="col">数据库版本</th><th class="awrbg" scope="col">SERVER ID</th><th class="awrbg" scope="col">是否为从库</th><th class="awrbg" scope="col">是否为MGR</th><th class="awrbg" scope="col">运行时间</th></tr>
+<tr><td scope="row" class='awrnc'>{{dbtype}}</td><td  class='awrnc'>{{version}}</td><td class='awrnc'>{{server_id}}</td><td class='awrnc'>
+{% if isslave%}
+是
+{% else %}
+否
+{% endif %}
+</td><td class='awrnc'>暂不支持</td>
+<td>{{(uptime / 60 / 60 /24) | round(2)}} 天</td>
+</tr>
+</table>
+<p />
+
+
+<table border="0" width="600" class="tdiff" summary="tps_qps_trx">
+<tr>
+	<th class="awrbg" scope="col">TPS</th>
+	<th class="awrbg" scope="col">QPS</th>
+	<th class="awrbg" scope="col">事务隔离级别</th>
+</tr>
+<tr>
+	<td scope="row" class='awrnc'>{{tps}}</td>
+	<td scope="row" class='awrnc'>{{qps}}</td>
+	<td scope="row" class='awrnc'>{{transaction_isolation}}</td>
+</tr>
+</table>
+
+
+{% if have_host %}
+<h3 class="awr"><a class="awr" name="host"></a>主机信息</h3>
+<table border="0" width="600" class="tdiff" summary="主机信息">
+<tr>
+	<th class="awrbg" scope="col"></th>
+	<th class="awrbg" scope="col">磁盘</th>
+	<th class="awrbg" scope="col">文件系统类型</th>
+	<th class="awrbg" scope="col">总大小</th>
+	<th class="awrbg" scope="col">已使用空间</th>
+	<th class="awrbg" scope="col">可用空间</th>
+	<th class="awrbg" scope="col">使用百分比</th>
+	<th class="awrbg" scope="col">目录(挂载点)</th>
+</tr>
+<tr>
+	<td scope="row" class='awrnc'>数据目录(datadir)</td>	
+	<td scope="row" class='awrnc'>{{data_dir[0]}}</td>	
+	<td scope="row" class='awrnc'>{{data_dir[1]}}</td>	
+	<td scope="row" class='awrnc'>{{data_dir[2]}}</td>	
+	<td scope="row" class='awrnc'>{{data_dir[3]}}</td>	
+	<td scope="row" class='awrnc'>{{data_dir[4]}}</td>	
+	<td scope="row" class='awrnc'>{{data_dir[5]}}</td>	
+	<td scope="row" class='awrnc'>{{data_dir[6]}}</td>	
+</tr>
+<tr>
+	<td scope="row" class='awrnc'>binlog目录(log_bin)</td>	
+	<td scope="row" class='awrnc'>{{logbin_dir[0]}}</td>	
+	<td scope="row" class='awrnc'>{{logbin_dir[1]}}</td>	
+	<td scope="row" class='awrnc'>{{logbin_dir[2]}}</td>	
+	<td scope="row" class='awrnc'>{{logbin_dir[3]}}</td>	
+	<td scope="row" class='awrnc'>{{logbin_dir[4]}}</td>	
+	<td scope="row" class='awrnc'>{{logbin_dir[5]}}</td>	
+	<td scope="row" class='awrnc'>{{logbin_dir[6]}}</td>	
+</tr>
+<tr>
+	<td scope="row" class='awrnc'>relay_log目录(relay_log)</td>	
+	<td scope="row" class='awrnc'>{{relay_dir[0]}}</td>	
+	<td scope="row" class='awrnc'>{{relay_dir[1]}}</td>	
+	<td scope="row" class='awrnc'>{{relay_dir[2]}}</td>	
+	<td scope="row" class='awrnc'>{{relay_dir[3]}}</td>	
+	<td scope="row" class='awrnc'>{{relay_dir[4]}}</td>	
+	<td scope="row" class='awrnc'>{{relay_dir[5]}}</td>	
+	<td scope="row" class='awrnc'>{{relay_dir[6]}}</td>	
+</tr>
+</table>
+
+<table border="0" width="600" class="tdiff">
+<tr>
+	<th class="awrbg" scope="col">当前CPU使用率</th>
+	<th class="awrbg" scope="col">总CPU使用率</th>
+	<th class="awrbg" scope="col">内存使用率</th>
+	<th class="awrbg" scope="col">系统版本</th>
+	<th class="awrbg" scope="col">负载</th>
+</tr>
+<tr>
+	<td scope="row" class='awrnc'>{{cpu_p}}%</td>
+	<td scope="row" class='awrnc'>{{cpu_p_total}}%</td>
+	<td scope="row" class='awrnc'>{{mem_p}}%</td>
+	<td scope="row" class='awrnc'>{{os_detail}}</td>
+	<td scope="row" class='awrnc'>{{loadavg}}</td>
+</tr>
+</table>
+{% endif %}
+
+
+
+
+{% if isslave %}
+<h3 class="awr"><a class="awr" name="slave_status"></a>主从复制状态</h3>
+<table border="0" width="600" class="tdiff" summary="主从复制状态">
+<tr>
+	<th class="awrbg" scope="col">Master_Host</th>
+	<th class="awrbg" scope="col">Master_Port</th>
+	<th class="awrbg" scope="col">Slave_IO_Running</th>
+	<th class="awrbg" scope="col">Slave_SQL_Running</th>
+	<th class="awrbg" scope="col">Master_Bind(延迟)</th>
+</tr>
+<tr>
+	<td scope="row" class='awrnc'>{{master_host}}</td>
+	<td scope="row" class='awrnc'>{{master_port}}</td>
+	<td scope="row" class='awrnc'>{{slave_io_running}}</td>
+	<td scope="row" class='awrnc'>{{slave_sql_running}}</td>
+	<td scope="row" class='awrnc'>{{master_bind}}</td>
+</tr>
+</table>
+{% endif %}
+
+
+<h3 class="awr"><a class="awr" name="huizongxinxi"></a>数据库汇总信息</h3>
+<table border="0" width="600" class="tdiff" summary="数据库汇总信息">
+<tr>
+	<th class="awrbg" scope="col">数据库名</th>
+	<th class="awrbg" scope="col">表数量</th>
+	<th class="awrbg" scope="col">数据大小</th>
+	<th class="awrbg" scope="col">索引大小</th>
+	<th class="awrbg" scope="col">总大小(数据+索引)</th>
+</tr>
+{% for db in dbcount %}
+<tr>
+	<td scope="row" class='awrnc'>{{db[0]}}</td>
+	<td scope="row" class='awrnc'>{{db[1]}}</td>
+	<td scope="row" class='awrnc'>{{(db[2] / 1024 /1024) | round(2) }} MB</td>
+	<td scope="row" class='awrnc'>{{(db[3] / 1024 /1024) | round(2) }} MB</td>
+	<td scope="row" class='awrnc'>{{((db[3] + db[2]) / 1024 /1024) | round(2) }} MB</td>
+</tr>
+{% else %}
+<tr>
+	<td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+<h3 class="awr"><a class="awr" name="not_innodb"></a>非INNODB表</h3>
+<table border="0" width="600" class="tdiff" summary="非INNODB表">
+<tr>
+	<th class="awrbg" scope="col">数据库名</th>
+	<th class="awrbg" scope="col">表名</th>
+	<th class="awrbg" scope="col">引擎名字</th>
+</tr>
+{% for db in no_innodb %}
+<tr>
+	<td scope="row" class='awrnc'>{{db[0]}}</td>
+	<td scope="row" class='awrnc'>{{db[1]}}</td>
+	<td scope="row" class='awrnc'>{{db[2]}}</td>
+</tr>
+{% else %}
+<tr>
+	<td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+
+<h3 class="awr"><a class="awr" name="no_primary"></a>无主键的表</h3>
+<table border="0" width="600" class="tdiff" summary="无主键的表">
+<tr>
+	<th class="awrbg" scope="col">数据库名</th>
+	<th class="awrbg" scope="col">表名</th>
+</tr>
+{% for db in no_primary %}
+<tr>
+	<th scope="row" class='awrnc'>{{db[0]}}</th>
+	<th scope="row" class='awrnc'>{{db[1]}}</th>
+</tr>
+{% else %}
+<tr>
+        <td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+
+<h3 class="awr"><a class="awr" name="repeat_index"></a>重复索引的表</h3>
+<table border="0" width="600" class="tdiff" summary="重复索引的表">
+<tr>
+	<th class="awrbg" scope="col">数据库名</th>
+	<th class="awrbg" scope="col">表名</th>
+	<th class="awrbg" scope="col">索引名</th>
+	<th class="awrbg" scope="col">列名</th>
+</tr>
+{% for db in repeat_index %}
+<tr>
+	<th scope="row" class='awrnc'>{{db[0]}}</th>
+	<th scope="row" class='awrnc'>{{db[1]}}</th>
+	<th scope="row" class='awrnc'>{{db[2]}}</th>
+	<th scope="row" class='awrnc'>{{db[3]}}</th>
+</tr>
+{% else %}
+<tr>
+        <td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+
+<h3 class="awr"><a class="awr" name="no_index"></a>没得索引的表</h3>
+<table border="0" width="600" class="tdiff" summary="没得索引的表">
+<tr>
+	<th class="awrbg" scope="col">数据库名</th>
+	<th class="awrbg" scope="col">表名</th>
+</tr>
+{% for db in no_index %}
+<tr>
+	<th scope="row" class='awrnc'>{{db[0]}}</th>
+	<th scope="row" class='awrnc'>{{db[1]}}</th>
+</tr>
+{% else %}
+<tr>
+        <td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+
+<h3 class="awr"><a class="awr" name="over30days_table_static"></a>超过30天未更新统计信息的表</h3>
+<table border="0" width="600" class="tdiff" summary="超过30天未更新统计信息的表">
+<tr>
+	<th class="awrbg" scope="col">数据库名</th>
+	<th class="awrbg" scope="col">表名</th>
+</tr>
+{% for db in over30days_table_static%}
+<tr>
+	<th scope="row" class='awrnc'>{{db[0]}}</th>
+	<th scope="row" class='awrnc'>{{db[1]}}</th>
+</tr>
+{% else %}
+<tr>
+        <td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+<h3 class="awr"><a class="awr" name="over30days_index_static"></a>超过30天未更新统计信息的索引</h3>
+<table border="0" width="600" class="tdiff" summary="超过30天未更新统计信息的索引">
+<tr>
+	<th class="awrbg" scope="col">数据库名</th>
+	<th class="awrbg" scope="col">表名</th>
+</tr>
+{% for db in over30days_index_static%}
+<tr>
+	<th scope="row" class='awrnc'>{{db[0]}}</th>
+	<th scope="row" class='awrnc'>{{db[1]}}</th>
+</tr>
+{% else %}
+<tr>
+        <td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+
+<h3 class="awr"><a class="awr" name="over_100M_data_free"></a>碎片超过100MB的表</h3>
+<table border="0" width="600" class="tdiff" summary="碎片超过100MB的表">
+<tr>
+	<th class="awrbg" scope="col">数据库名</th>
+	<th class="awrbg" scope="col">表名</th>
+	<th class="awrbg" scope="col">碎片(DATA_FREE)</th>
+</tr>
+{% for db in over_100M_data_free %}
+<tr>
+	<th scope="row" class='awrnc'>{{db[0]}}</th>
+	<th scope="row" class='awrnc'>{{db[1]}}</th>
+	<th scope="row" class='awrnc'>{{db[2]}}</th>
+</tr>
+{% else %}
+<tr>
+        <td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+
+<h3 class="awr"><a class="awr" name="user_any"></a>任意主机都可登陆的用户</h3>
+<table border="0" width="600" class="tdiff" summary="任意主机都可登陆的用户">
+<tr>
+	<th class="awrbg" scope="col">用户名</th>
+	<th class="awrbg" scope="col">主机名</th>
+</tr>
+{% for db in user_any%}
+<tr>
+	<th scope="row" class='awrnc'>{{db[0]}}</th>
+	<th scope="row" class='awrnc'>{{db[1]}}</th>
+</tr>
+{% else %}
+<tr>
+        <td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+
+<h3 class="awr"><a class="awr" name="session_top10"></a>连接时间最长的10个用户</h3>
+<table border="0" width="600" class="tdiff" summary="连接时间最长的10个用户">
+<tr>
+	<th class="awrbg" scope="col">用户名</th>
+	<th class="awrbg" scope="col">来源主机</th>
+	<th class="awrbg" scope="col">连接的数据库</th>
+	<th class="awrbg" scope="col">SQL类型</th>
+	<th class="awrbg" scope="col">连接时间</th>
+	<th class="awrbg" scope="col">连接状态</th>
+	<th class="awrbg" scope="col">SQL语句</th>
+</tr>
+{% for db in session_top10%}
+<tr>
+	<th scope="row" class='awrnc'>{{db[0]}}</th>
+	<th scope="row" class='awrnc'>{{db[1]}}</th>
+	<th scope="row" class='awrnc'>{{db[2]}}</th>
+	<th scope="row" class='awrnc'>{{db[3]}}</th>
+	<th scope="row" class='awrnc'>{{db[4]}}</th>
+	<th scope="row" class='awrnc'>{{db[5]}}</th>
+	<th scope="row" class='awrnc'>{{db[6]}}</th>
+</tr>
+{% else %}
+<tr>
+        <td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+
+
+<h3 class="awr"><a class="awr" name="exec_sql_top10"></a>执行次数前10的SQL</h3>
+<table border="0" width="600" class="tdiff" summary="执行次数前10的SQL">
+<tr>
+	<th class="awrbg" scope="col">SQL语句</th>
+	<th class="awrbg" scope="col">数据库</th>
+	<th class="awrbg" scope="col">全表扫描的总次数</th>
+	<th class="awrbg" scope="col">执行次数</th>
+	<th class="awrbg" scope="col">total_latency</th>
+	<th class="awrbg" scope="col">max_latency</th>
+	<th class="awrbg" scope="col">avg_latency</th>
+	<th class="awrbg" scope="col">lock_latency</th>
+	<th class="awrbg" scope="col">返回的总行数</th>
+	<th class="awrbg" scope="col">平均每次返回的行数</th>
+	<th class="awrbg" scope="col">digest</th>
+</tr>
+{% for db in sql_top10%}
+<tr>
+	<th scope="row" class='awrnc'>{{db[0]}}</th>
+	<th scope="row" class='awrnc'>{{db[1]}}</th>
+	<th scope="row" class='awrnc'>{{db[2]}}</th>
+	<th scope="row" class='awrnc'>{{db[3]}}</th>
+	<th scope="row" class='awrnc'>{{db[4]}}</th>
+	<th scope="row" class='awrnc'>{{db[5]}}</th>
+	<th scope="row" class='awrnc'>{{db[6]}}</th>
+	<th scope="row" class='awrnc'>{{db[7]}}</th>
+	<th scope="row" class='awrnc'>{{db[8]}}</th>
+	<th scope="row" class='awrnc'>{{db[9]}}</th>
+	<th scope="row" class='awrnc'>{{db[10]}}</th>
+</tr>
+{% else %}
+<tr>
+        <td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+
+<h3 class="awr"><a class="awr" name="table_top10"></a>最大的前10张表</h3>
+<table border="0" width="600" class="tdiff" summary="前10大的表">
+<tr>
+	<th class="awrbg" scope="col">数据库名</th>
+	<th class="awrbg" scope="col">表名</th>
+	<th class="awrbg" scope="col">行数</th>
+	<th class="awrbg" scope="col">数据大小</th>
+	<th class="awrbg" scope="col">索引大小</th>
+	<th class="awrbg" scope="col">总大小</th>
+</tr>
+{% for db in table_top10%}
+<tr>
+	<th scope="row" class='awrnc'>{{db[0]}}</th>
+	<th scope="row" class='awrnc'>{{db[1]}}</th>
+	<th scope="row" class='awrnc'>{{db[2]}}</th>
+	<th scope="row" class='awrnc'>{{(db[3] / 1024 /1024) | round(2)}} MB</th>
+	<th scope="row" class='awrnc'>{{(db[4] / 1024 /1024) | round(2)}} MB</th>
+	<th scope="row" class='awrnc'>{{((db[4] +db[3]) / 1024 /1024) | round(2)}} MB</th>
+</tr>
+{% else %}
+<tr>
+        <td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+
+<h3 class="awr"><a class="awr" name="lock_top10"></a>前10的锁等待(锁)</h3>
+<table border="0" width="600" class="tdiff" >
+<tr>
+	<th class="awrbg" scope="col">库</th>
+	<th class="awrbg" scope="col">表</th>
+	<th class="awrbg" scope="col">阻塞时间</th>
+	<th class="awrbg" scope="col">相关索引</th>
+	<th class="awrbg" scope="col">阻塞类型</th>
+	<th class="awrbg" scope="col">被阻塞SQL</th>
+	<th class="awrbg" scope="col">阻塞SQL</th>
+	<th class="awrbg" scope="col">sql_kill_blocking_query</th>
+</tr>
+{% for db in lock_top10%}
+<tr>
+	<th scope="row" class='awrnc'>{{db[0]}}</th>
+	<th scope="row" class='awrnc'>{{db[1]}}</th>
+	<th scope="row" class='awrnc'>{{db[2]}}</th>
+	<th scope="row" class='awrnc'>{{db[3]}}</th>
+	<th scope="row" class='awrnc'>{{db[4]}}</th>
+	<th scope="row" class='awrnc'>{{db[5]}}</th>
+	<th scope="row" class='awrnc'>{{db[6]}}</th>
+	<th scope="row" class='awrnc'>{{db[7]}}</th>
+</tr>
+{% else %}
+<tr>
+        <td scope="row" class='awrnc'>没得</td>
+</tr>
+{% endfor %}
+</table>
+
+
+
+<h3 class="awr"><a class="awr" name="all_plugins"></a>所有插件</h3>
+<table border="0" width="600" class="tdiff">
+<tr>
+	<th class="awrbg" scope="col">插件名字</th>
+	<th class="awrbg" scope="col">是否启用</th>
+	<th class="awrbg" scope="col">插件类型</th>
+	<th class="awrbg" scope="col">插件版本</th>
+	<th class="awrbg" scope="col">插件作者</th>
+	<th class="awrbg" scope="col">LOAD_OPTION</th>
+</tr>
+{% for db in all_plugins%}
+<tr>
+	<th scope="row" class='awrnc'>{{db[0]}}</th>
+	<th scope="row" class='awrnc'>{{db[1]}}</th>
+	<th scope="row" class='awrnc'>{{db[2]}}</th>
+	<th scope="row" class='awrnc'>{{db[3]}}</th>
+	<th scope="row" class='awrnc'>{{db[4]}}</th>
+	<th scope="row" class='awrnc'>{{db[5]}}</th>
+</tr>
+{%endfor%}
+</table>
+
+</body>
+</html>
