@@ -12,6 +12,10 @@ postgresql_inspection.py  巡检pg附操作系统(计划中)
 
 templates.html 巡检报告模板
 
+```shell
+python mysql_inspection.py -h
+python xunjian_analyze.py xxxx.json
+```
 
 
 # 支持范围
