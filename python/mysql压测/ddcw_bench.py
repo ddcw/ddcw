@@ -1,6 +1,5 @@
 import time
 import pymysql
-#import cx_Oracle
 import argparse
 from multiprocessing import Process, Queue, Manager
 from faker import Faker
@@ -220,7 +219,7 @@ def main(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TABLE_ROWS
 		cursor.execute("select count(*) from {DBNAME}.{table_name}".format(DBNAME=DBNAME, table_name=table_name))
 		if int(cursor.fetchall()[0][0]) > 0:
 			print("{DBNAME}.{table_name} 已存在数据, 请先清空, 或者换个名字".format(DBNAME=DBNAME, table_name=table_name))
-			exit(1)
+			sys.exit(1)
 
 		#这里不加commit的话, 多进程最后一张表就无法创建索引..... 太坑了...
 		cursor.execute("commit")
@@ -264,7 +263,7 @@ def main(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TABLE_ROWS
 			last_query = current_query
 			last_commit_rollback = current_commit_rollback
 		print("压测完成")
-		exit(0)
+		sys.exit(0)
 			
 	elif ACTION == "cleanup":
 		print("开始清理表")
