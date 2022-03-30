@@ -18,19 +18,20 @@ VERSION = "0.1"
 #返回一个cursor
 def get_cursor(HOST,PORT,USER,PASSWORD,SERVICE_NAME):
 	dsn = cx_Oracle.makedsn(HOST, PORT, service_name=SERVICE_NAME)
-	db = cx_Oracle.connect(
+	conn = cx_Oracle.connect(
 	user=USER,
 	password=PASSWORD,
 	dsn=dsn,
 	encoding="UTF-8",
 	)
-	return db.cursor()
+	return conn
 
 
 #插入数据
 def insert_table(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TABLE_ROWS, TABLE_PER_COMMIT, TABLE_THREAD, NO_LOG, TABLE_COUNT, p, q):
 	fake = Faker()
-	cursor = get_cursor(HOST, PORT, USER, PASSWORD, DBNAME)
+	conn = get_cursor(HOST, PORT, USER, PASSWORD, DBNAME)
+	cursor = conn.cursor()
 	#while not q.empty():  #多进程, 不可靠....
 	while True:
 		try:
@@ -55,20 +56,23 @@ def insert_table(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TA
 				values += "values({id},{k},'{c}','{c2}')".format(id=rest_of_rows-x, k=random.randint(1,TABLE_ROWS-20), c=fake.text(100), c2=fake.text(50))
 				sql = "insert into {table_name}(id,k,c,c2) {values}".format(table_name=table_name, values=values)
 				cursor.execute(sql)
-			cursor.execute("commit")
+			#cursor.execute("commit")
+			conn.commit()
 			rest_of_rows -= TABLE_PER_COMMIT
 		#本来像顺便把索引创建了, 结果会产生metadata lock.. 原因: 建表后没有提交...  虽然其它表能查询到索引和数据...
 		print("process: {p} 给表 {table_name} 创建索引 k_{table_index}".format(p=p,table_name=table_name, table_index=table_index))
 		#cursor.execute("unlock tables;")
 		#cursor.execute("START TRANSACTION")
 		cursor.execute("CREATE INDEX k_{table_index} ON {table_name}(k)".format(table_index=table_index, table_name=table_name))
-		cursor.execute("commit")
+		#cursor.execute("commit")
+		conn.commit()
 	cursor.close()
 
 
 #随机压测
 def bench(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TABLE_ROWS, TABLE_PER_COMMIT, TABLE_THREAD, NO_LOG, TABLE_COUNT, p, MODE):
-	cursor = get_cursor(HOST, PORT, USER, PASSWORD, DBNAME)
+	conn = get_cursor(HOST, PORT, USER, PASSWORD, DBNAME)
+	cursor = conn.cursor()
 	fake = Faker()
 
 	time.sleep(random.random()+random.random()+random.random()+random.random())#随机沉睡一段时间, 醒来就该干活了..
@@ -77,8 +81,8 @@ def bench(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TABLE_ROW
 			table_name = str(TABLE_BASE_NAME) + str(random.randint(1,TABLE_COUNT))
 			for index in range(1,TABLE_ROWS+1):
 				sql = []
-				sql.append("UPDATE {table_name} SET k=k+1 WHERE id={index};".format(table_name=table_name, index=random.randint(1,TABLE_ROWS)))
-				sql.append("UPDATE {table_name} SET c ='{c}' WHERE id={index};".format(table_name=table_name,c=fake.text(100), index=random.randint(1,TABLE_ROWS)))
+				sql.append("UPDATE {table_name} SET k=k+1 WHERE id={index}".format(table_name=table_name, index=random.randint(1,TABLE_ROWS)))
+				sql.append("UPDATE {table_name} SET c ='{c}' WHERE id={index}".format(table_name=table_name,c=fake.text(100), index=random.randint(1,TABLE_ROWS)))
 				sql.append("DELETE FROM {table_name} WHERE id={index}".format(table_name=table_name, index=index))
 				sql.append("INSERT INTO {table_name} (id, k, c, c2) VALUES({index},{index2},'{c}','{c2}')".format(table_name=table_name, index=index, index2=index+1, c=fake.text(100), c2=fake.text(50)))
 				yield sql
@@ -95,8 +99,8 @@ def bench(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TABLE_ROW
 			table_name = str(TABLE_BASE_NAME) + str(random.randint(1,TABLE_COUNT))
 			for index in range(1,TABLE_ROWS+1):
 				sql = []
-				sql.append("UPDATE {table_name} SET k=k+1 WHERE id={index};".format(table_name=table_name, index=random.randint(1,TABLE_ROWS)))
-				sql.append("UPDATE {table_name} SET c ='{c}' WHERE id={index};".format(table_name=table_name,c=fake.text(100), index=random.randint(1,TABLE_ROWS)))
+				sql.append("UPDATE {table_name} SET k=k+1 WHERE id={index}".format(table_name=table_name, index=random.randint(1,TABLE_ROWS)))
+				sql.append("UPDATE {table_name} SET c ='{c}' WHERE id={index}".format(table_name=table_name,c=fake.text(100), index=random.randint(1,TABLE_ROWS)))
 				sql.append("DELETE FROM {table_name} WHERE id={index}".format(table_name=table_name, index=index))
 				sql.append("INSERT INTO {table_name} (id, k, c, c2) VALUES({index},{index2},'{c}','{c2}')".format(table_name=table_name, index=index, index2=index+1, c=fake.text(100), c2=fake.text(50)))
 				for x in range(1,19):
@@ -113,10 +117,12 @@ def bench(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TABLE_ROW
 				try:
 					cursor.execute(sql)
 				except:
-					cursor.execute("rollback")
+					#cursor.execute("rollback")
+					conn.rollback()
 					time.sleep(random.random())
 					break
-			cursor.execute("commit")
+			#cursor.execute("commit")
+			conn.commit()
 	elif MODE == 1:
 		for sql_list in read_sql:
 			#cursor.execute("begin")
@@ -124,10 +130,12 @@ def bench(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TABLE_ROW
 				try:
 					cursor.execute(sql)
 				except:
-					cursor.execute("rollback")
+					#cursor.execute("rollback")
+					conn.rollback()
 					time.sleep(random.random())
 					break
-			cursor.execute("commit")
+			#cursor.execute("commit")
+			conn.commit()
 	elif MODE == 2:
 		for sql_list in write_sql:
 			#cursor.execute("begin")
@@ -135,10 +143,12 @@ def bench(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TABLE_ROW
 				try:
 					cursor.execute(sql)
 				except:
-					cursor.execute("rollback")
+					#cursor.execute("rollback")
+					conn.rollback()
 					time.sleep(random.random())
 					break
-			cursor.execute("commit")
+			#cursor.execute("commit")
+			conn.commit()
 	
 	else:
 		return
@@ -173,19 +183,19 @@ def get_query_commit_rollback_oracle(cursor):
 
 def _argparse():
 	parser = argparse.ArgumentParser(description='Mysql 压测脚本, 其它类型的请看 https://github.com/ddcw')
-	parser.add_argument('--type',  action='store', dest='db_type', default='mysql', help='数据库类型(目前只支持Mysql)')
+	parser.add_argument('--type',  action='store', dest='db_type', default='oracle', help='数据库类型(此参数暂时无效)')
 	parser.add_argument('--host',  action='store', dest='host', default='127.0.0.1', help='数据库服务器地址. default 127.0.0.1')
-	parser.add_argument('--port', '-P' ,  action='store', dest='port', default=3306, type=int , help='数据库端口. default 3306')
-	parser.add_argument('--user', '-u' ,  action='store', dest='user', default="root",  help='数据库用户')
+	parser.add_argument('--port', '-P' ,  action='store', dest='port', default=1521, type=int , help='数据库端口. default 1521')
+	parser.add_argument('--user', '-u' ,  action='store', dest='user', default="system",  help='数据库用户')
 	parser.add_argument('--password', '-p' ,  action='store', dest='password',   help='数据库密码')
-	parser.add_argument('--db-name', '-d' ,  action='store', dest='dbname',   help='数据库名字')
+	parser.add_argument('--db-name', '--service-name' , '-s', '-d' ,  action='store', dest='dbname',   help='数据库服务名')
 	parser.add_argument('--version', '-v', '-V', action='store_true', dest="version",  help='VERSION')
 	parser.add_argument( action='store', dest='action', nargs='?', default='prepare', help='prepare|run|cleanup')
 	parser.add_argument('--table-count', '-t' ,  action='store', dest='table_count', default=12, type=int, help='表的数量 默认12')
 	parser.add_argument('--table-name', '-Tname' ,  action='store', dest='table_name', default="ddcw", type=str, help='表的名字 默认ddcw')
 	parser.add_argument('--table-rows', '-Trows' ,  action='store', dest='table_rows', default=100000, type=int, help='每张表有多少行 默认100K')
 	parser.add_argument('--insert-per-commit', '-i' ,  action='store', dest='insert_per_commit', default=1000, type=int, help='准备数据的时候, 多少次insert后再commit(只有prepare阶段才有效) 默认1000')
-	parser.add_argument('--no-log', '-n' ,  action='store_true', dest='no_log', default=True,  help='准备数据的时候, 是否写日志(默认不写)')
+	parser.add_argument('--no-log', '-n' ,  action='store_true', dest='no_log', default=True,  help='暂时无效....')
 	parser.add_argument('--report-interval', '-ri' ,  action='store', dest='report_interval', default=10, type=int, help='多少秒显示一次结果(默认10)')
 	parser.add_argument('--thread', '-T' ,  action='store', dest='thread', default=4, type=int , help='并行度(默认4)')
 	parser.add_argument('--run-time',  '-r',  action='store', dest='runtime', default=120, type=int , help='运行时间(单位:秒)(默认120)')
@@ -205,7 +215,8 @@ def main(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TABLE_ROWS
 	#MODE 0 读写  1 仅读  2仅写
 
 	#获取一个cursor
-	cursor = get_cursor(HOST, PORT, USER, PASSWORD, DBNAME)
+	conn = get_cursor(HOST, PORT, USER, PASSWORD, DBNAME)
+	cursor = conn.cursor()
 
 	if ACTION == "prepare":
 		print("开始创建表...")
@@ -228,7 +239,8 @@ def main(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TABLE_ROWS
 			exit(1)
 
 		#这里不加commit的话, 多进程最后一张表就无法创建索引..... 太坑了...
-		cursor.execute("commit")
+		#cursor.execute("commit")
+		conn.commit()
 		print("开始插入数据")
 		#进程间通信用队列, 队列有个BUG, 如果直接循环打印(不做其它任何操作,就是快速取值)的话, 可能取不了全部队列....
 		q = Queue(TABLE_COUNT*2)
@@ -281,7 +293,7 @@ def main(HOST, PORT, USER, PASSWORD, DBNAME, ACTION, TABLE_BASE_NAME, TABLE_ROWS
 			print("清除表 {table_name} 完成.".format(table_name=table_name))
 		print("清理完成")
 	else:
-		print("不知道 ACTION , 仅支持 prepare|run|cleanup")
+		print("不知道 {ACTION} , 仅支持 prepare|run|cleanup".format(ACTION=ACTION))
 
 if __name__ == "__main__":
 	#捕获ctrl+c
