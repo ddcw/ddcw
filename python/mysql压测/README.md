@@ -13,9 +13,9 @@
 # 用法
 
 ```shell
-python3 ddcw_bench.py  --password 123456 -d testdb2 prepare #初始化数据
-python3 ddcw_bench.py  --password 123456 -d testdb2 run  #压测
-python3 ddcw_bench.py  --password 123456 -d testdb2 cleanup #清理数据
+python3 ddcw_bench.py  --password 123456 -D testdb2 prepare #初始化数据
+python3 ddcw_bench.py  --password 123456 -D testdb2 run  #压测
+python3 ddcw_bench.py  --password 123456 -D testdb2 cleanup #清理数据
 ```
 
 
@@ -59,4 +59,15 @@ prepare|run|cleanup    prepare初始化数据  run运行压测  cleanup清除数
 mysql5.7/8.0
 
 
+# changelog
+v0.11  2022.04.01
+新增显示错误数量
+每个进程随机睡眠时间减半
+每个进程由cursor变为了conn
+实现上个版本忘写了的功能(--log 记录日志, 默认不写)
+移除 --type 选项(反正没用)
+指定数据库名由 -d 变 -D
+默认并发数由4变8
 
+v0.1 2022.03.28
+基本上写完,剩下的后面再说...
