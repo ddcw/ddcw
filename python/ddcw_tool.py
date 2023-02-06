@@ -6,6 +6,7 @@ from multiprocessing import Process
 from faker import Faker
 import datetime,time
 import random
+import socket
 
 class HostPortUP(object):
 	def __init__(self,*args,**kwargs):
@@ -14,7 +15,7 @@ class HostPortUP(object):
 		self.port = kwargs["port"] if 'port' in kwargs else None
 		self.user = kwargs["user"] if 'user' in kwargs else 'root'
 		self.password = kwargs["password"] if 'password' in kwargs else None
-		self.status = False #是否连接 只有连接成功, 才会改为True
+		self.status = False #上一个调用是否成功.
 		self.msg = '' #连接成功或者失败,或者其它报错都记录在这个属性上
 		self._conn = None #连接
 
@@ -22,7 +23,12 @@ class HostPortUP(object):
 		return f'Host:{self.host} Port:{self.port} User:{self.user} Password:{self.password} Status:{self.status}'
 
 	def conn(self)->bool:
-		pass
+		conn = self.get_conn()
+		if self.status:
+			self._conn = conn
+			return True
+		else:
+			return False
 
 	def close(self)->bool:
 		try:
@@ -46,16 +52,44 @@ class HostPortUP(object):
 	def get_conn(self):
 		pass
 
-	def get_result_dict(self)->dict:
+	def execute(self,command):
 		pass
+
+class _dbclass(HostPortUP):
+	def __init__(self,*args,**kwargs):
+		super().__init__(**kwargs) #object.__init__() takes no parameters
+
+	def sql(self,sql)->tuple:
+		"""
+		必须先self.conn()
+		"""
+		try:
+			cursor = self._conn.cursor()
+			cursor.execute(sql)
+			data = cursor.fetchall()
+			cursor.close()
+			self.status = True
+			return data
+		except Exception as e:
+			self.msg = e
+			self.status = False
+			return tuple()
+
+	def execute(self,command):
+		return self.sql(command)
+
 
 class ssh(HostPortUP):
 	def __init__(self,*args,**kwargs):
 		super().__init__(**kwargs) #继承HostPortUP的属性
 		self.private_key = kwargs["private_key"] if 'private_key' in kwargs else None #自己的属性
 		self.port = 22 if self.port is None else self.port #设置默认值
+		del self.sql
 
 	def conn(self)->bool:
+		pass
+
+	def get_conn(self,):
 		pass
 
 class ssh_sftp(ssh):
@@ -67,15 +101,12 @@ class ssh_sftp(ssh):
 		pass
 
 
-class mysql(HostPortUP):
+class mysql(_dbclass):
 	def __init__(self,*args,**kwargs):
 		super().__init__(**kwargs)
 		self.socket = kwargs["socket"] if 'socket' in kwargs else None
 		self.database = kwargs["database"] if 'database' in kwargs else None
 		self.port = 3306 if self.port is None else self.port #设置默认值
-
-	def conn(self):
-		pass
 
 	def get_conn(self):
 		try:
@@ -87,18 +118,26 @@ class mysql(HostPortUP):
 			database=self.database,
 			unix_socket = self.socket,
 			)
-			#self.status = True
+			self.status = True
 			return conn
 		except Exception as e:
+			self.status = False
 			self.msg = e
 			return False
 
 
-class oracle(HostPortUP):
+class oracle(_dbclass):
+	def __init__(self,*args,**kwargs):
+		super().__init__(**kwargs)
+		self.servicename = kwargs["servicename"] if 'servicename' in kwargs else None
+		self.port = 1521 if self.port is None else self.port #设置默认值
+
+	def get_conn(self,):
+		pass
+
+class postgres(_dbclass):
 	pass
 
-class postgres(HostPortUP):
-	pass
 
 class costcpu:
 	def __init__(self,n:int,action:int):
@@ -113,13 +152,7 @@ class costcpu:
 	def stop(self):
 		pass
 
-def scanport(start=1024,end=65535,protocol=1)->list:
-	"""
-	start:起始端口
-	end:结束端口
-	protocol: 1:tcp 2:udp
-	"""
-	pass
+
 
 class benchmark_db:
 	def __init__(self,*args,**kwargs):
@@ -150,6 +183,7 @@ class benchmark_db:
 
 
 	def printinfo(self,msg):
+		self.msg.append(msg)
 		if self.pipe is None:
 			print(msg)
 		else:
@@ -244,7 +278,7 @@ primary key(id)
 	def benchmark(self):
 		fake = Faker(locale='zh_CN')
 		if self.trx_type == 1: #混合读写 10主键读, 4范围读, 2:update 1:delete 1:insert
-			self.print('start read and write.')
+			self.printinfo('start read and write.')
 			conn = self.get_conn()
 			while True:
 				begintime = time.time()
@@ -276,13 +310,13 @@ primary key(id)
 					conn.commit()
 					cursor.close()
 				except Exception as e:
-					self.print(e)
+					self.printinfo(e)
 					#time.sleep(1)
 					pass #error+1 TODO
 			conn.close()
 		elif self.trx_type == 2:
 			conn = self.get_conn()
-			self.print('start read only.')
+			self.printinfo('start read only.')
 			while True:
 				try:
 					cursor = conn.cursor()
@@ -303,7 +337,7 @@ primary key(id)
 			conn.close()
 		elif self.trx_type == 3:
 			conn = self.get_conn()
-			self.print('start write only.')
+			self.printinfo('start write only.')
 			while True:
 				try:
 					cursor = conn.cursor()
@@ -333,6 +367,9 @@ primary key(id)
 
 
 	def run(self):
+		if self.database is None:
+			return 'database is None'
+		self.msg = [] #清空
 		#parallel:压测  还有个进程负责监控
 		P_monitor = Process(target=self._monitor,)
 		P_monitor.start()
@@ -370,9 +407,6 @@ class benchmark_mysql(benchmark_db,mysql):
 		super().__init__(**kwargs)
 
 class email(HostPortUP):
-	pass
-
-def testport(start=1024,end=65535,protocol=1)->bool:
 	pass
 
 def localcmd(cmd:str)->dict:
@@ -415,3 +449,39 @@ def encrypt(k,salt=None)->bytes:
 
 def decrypt(k,salt=None)->str:
 	return base64.b64decode(k).decode('utf-8')
+
+def scanport(host='0.0.0.0',start=None,end=None,)->list:
+	"""
+	host:默认0.0.0.0
+	start:起始端口
+	end:结束端口, 不指定就只扫描start的那个端口
+	扫描目标主机的tcp端口,返回能正常建立连接的tcp端口(list)
+	用法例子: 
+		scanport() 扫描本机所有tcp端口
+		scanport(host='192.168.101.21') 扫描192.168.101.21的所有tcp端口
+		ddcw_tool.scanport(host='192.168.101.21',start=1,end=22)  扫描指定主机的指定范围的端口
+		ddcw_tool.scanport(host='192.168.101.21',start=22) 扫描指定主机的指定端口
+	"""
+	success_port = []
+	if start is None  or (start is None and end is None):
+		start,end = 1,65535
+	elif end is None:
+		end = start
+	else:
+		pass
+
+	family = socket.AF_INET
+	try:
+		_tmp = socket.inet_aton(host) #利用inet_aton不支持ipv6来判断是否为ipv4, 但是并没有使用inet_pton判断是否为ip地址(懒)
+	except:
+		family = socket.AF_INET6
+		
+	for x in range(start,end+1):
+		try:
+			conn = socket.socket(family, socket.SOCK_STREAM)
+			conn.connect((host,x))
+			conn.close()
+			success_port.append(x)
+		except:
+			pass
+	return success_port
