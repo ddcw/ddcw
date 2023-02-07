@@ -18,6 +18,7 @@ class HostPortUP(object):
 		self.status = False #上一个调用是否成功.
 		self.msg = '' #连接成功或者失败,或者其它报错都记录在这个属性上
 		self._conn = None #连接
+		self.isconn = False #是否连接.
 
 	def __str__(self):
 		return f'Host:{self.host} Port:{self.port} User:{self.user} Password:{self.password} Status:{self.status}'
@@ -26,6 +27,7 @@ class HostPortUP(object):
 		conn = self.get_conn()
 		if self.status:
 			self._conn = conn
+			self.isconn = True
 			return True
 		else:
 			return False
@@ -63,6 +65,8 @@ class _dbclass(HostPortUP):
 		"""
 		必须先self.conn()
 		"""
+		if not self.isconn:
+			return 'please conn() first'
 		try:
 			cursor = self._conn.cursor()
 			cursor.execute(sql)
@@ -78,27 +82,162 @@ class _dbclass(HostPortUP):
 	def execute(self,command):
 		return self.sql(command)
 
-
-class ssh(HostPortUP):
-	def __init__(self,*args,**kwargs):
-		super().__init__(**kwargs) #继承HostPortUP的属性
-		self.private_key = kwargs["private_key"] if 'private_key' in kwargs else None #自己的属性
-		self.port = 22 if self.port is None else self.port #设置默认值
-		del self.sql
-
-	def conn(self)->bool:
+class _shellcmd:
+	def command(self,cmd)->tuple:
 		pass
+
+	def cpu(self)->dict: 
+		data = self.command('lscpu')
+		if data[0] == 0:
+			_data = {'status':True}
+			for x in ('Architecture','Socket','Core','Thread','CPU MHz','BogoMIPS','vendor','Model name'):
+				try:
+					_data[x] = data[1].split(x)[1].split('\n')[0].split(':')[1].strip()
+				except:
+					pass
+			return _data
+		else:
+			return {'status':False,'msg':data[2]}
+
+	def mem(self)->dict:
+		data = self.command('cat /proc/meminfo')
+		if data[0] == 0:
+			_data = {'status':True}
+			for x in ('MemTotal','MemFree','MemAvailable','Buffers','Cached','SwapTotal','SwapFree','HugePages_Total','HugePages_Free','Shmem'):
+				try:
+					_data[x] = data[1].split(x)[1].split('\n')[0].split(':')[1].strip() #暂时不做单位换算
+				except:
+					pass
+			return _data
+		else:
+			return {'status':False,'msg':data[2]}
+
+	def disk(self)->dict:
+		data = self.command('lsblk -d -o NAME,KNAME,SIZE,RO,STATE,ROTA,SCHED,UUID | tail -n +2')
+		if data[0] == 0:
+			_data = {'status':True}
+			_data2 = []
+			for x in data[1].split('\n'):
+				_data2.append(x.split())
+			_data['data'] = _data2
+			return _data
+		else:
+			return {'status':False,'msg':data[2]}
+	
+	def fs(self,)->dict:
+		data = self.command('df -PT --direct -k | tail -n +2')
+		if data[0] == 0:
+			_data = {'status':True}
+			_data2 = []
+			for x in data[1].split('\n'):
+				_data2.append(x.split())
+			_data['data'] = _data2
+			return _data
+		else:
+			return {'status':False,'msg':data[2]}
+
+		
+
+
+class ssh(HostPortUP,_shellcmd):
+	def __init__(self,*args,**kwargs):
+		super().__init__(**kwargs) 
+		self.private_key = kwargs["private_key"] if 'private_key' in kwargs else None #rsa,dsa都可以
+		self.port = 22 if self.port is None else self.port 
+
+	def command(self,cmd)->tuple: #(exit_code,strout,stderr)
+		if not self.isconn:
+			return 'please conn() first'
+		try:
+			ssh = self._conn
+			stdin, stdout, stderr = ssh.exec_command(cmd)
+			self.status = True
+			return stdout.channel.recv_exit_status(),str(stdout.read().rstrip(),encoding="utf-8"),str(stderr.read().rstrip(),encoding="utf-8")
+		except Exception as e:
+			self.status = False
+			self.msg = e
+			return tuple()
+
+
+	def execute(self,cmd):
+		return self.command(cmd)
+		
 
 	def get_conn(self,):
-		pass
+		HOST = self.host
+		SSH_PORT = self.port
+		SSH_USER = self.user
+		SSH_PASSWORD = self.password
+		SSH_PKEY = self.private_key
+		ssh = paramiko.SSHClient()
+		ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+		if SSH_PKEY is None:
+			try:
+				ssh.connect(hostname=HOST, port=SSH_PORT, username=SSH_USER, password=SSH_PASSWORD, )
+				self.isconn = True
+				self.status = True
+				return ssh
+			except Exception as e:
+				self.msg = e
+				self.status = False
+				return None
+		else:
+			try:
+				ssh.connect(hostname=HOST, port=SSH_PORT, username=SSH_USER, password=SSH_PASSWORD, pkey=paramiko.RSAKey.from_private_key_file(SSH_PKEY))
+				self.isconn = True
+				self.status = True
+				return ssh
+			except:
+				try:
+					ssh.connect(hostname=HOST, port=SSH_PORT, username=SSH_USER, password=SSH_PASSWORD, pkey=paramiko.DSSKey.from_private_key_file(SSH_PKEY))
+					self.isconn = True
+					self.status = True
+					return ssh
+				except Exception as e:
+					self.msg = e
+					self.status = False
+					return None
+				
+					
 
 class ssh_sftp(ssh):
-	#属性和ssh一样, 只需要重构conn,然后添加上传文件的功能即可
-	def conn(self):
-		pass
-	
-	def uploadfile(self,localfile,remote_dir='/tmp')->bool:
-		pass
+	def get_conn(self):
+		try:
+			tp = paramiko.Transport((self.host,int(self.port)))
+			tp.connect(username=self.user, password=self.password)
+			self.status = True
+			self.isconn = True
+			return tp
+		except Exception as e:
+			self.msg = msg
+			self.status = False
+		#sftp = paramiko.SFTPClient.from_transport(ts)
+		#return sftp
+
+	def put(self,localpath,remotepath,get=False)->bool:
+		"""
+		get : True 表示是下载.
+		remotepath和localpath都是文件名(绝对路径), 我懒得去拼接路径了, 不然可以给个remotepath默认路径的
+		"""
+		if not self.isconn:
+			self.msg = 'please conn() first'
+			return False
+		try:
+			sftp = paramiko.SFTPClient.from_transport(self._conn)
+			if get:
+				sftp.get(remotepath,localpath)
+			else:
+				sftp.put(localpath,remotepath)
+			sftp.close()
+			self.status = True
+		except Exception as e:
+			self.msg = e
+			self.status = False
+		return self.status
+
+	def get(self,remotepath,localpath)->bool:
+		return self.put(localpath,remotepath,True)
+		
 
 
 class mysql(_dbclass):
@@ -125,6 +264,66 @@ class mysql(_dbclass):
 			self.msg = e
 			return False
 
+	def _get_tps_qps_aux(self,conn)->tuple:
+		cursor = conn.cursor()
+		cursor.execute('show global status')
+		data = cursor.fetchall()
+		queries = 0
+		commit_rollback = 0
+		for x in data:
+			if x[0] == 'Queries':
+				queries = int(x[1])
+			elif x[0] == 'Com_rollback':
+				commit_rollback += int(x[1])
+			elif x[0] == 'Com_commit':
+				commit_rollback += int(x[1])
+			else:
+				continue
+
+		cursor.close()
+		return queries,commit_rollback
+
+	def get_tps_qps(self):
+		if not self.isconn:
+			return 'please execute conn() first'
+		queries,commit_rollback = self._get_tps_qps_aux(self._conn)
+		date = time.time()
+		time.sleep(0.1)
+		while True:
+			current_queries,current_commit_rollback = self._get_tps_qps_aux(self._conn)
+			current_date = time.time()
+			tps = round((current_commit_rollback-commit_rollback)/(current_date-date),2)
+			qps = round((current_queries-queries)/(current_date-date),2)
+			queries,commit_rollback,date = current_queries,current_commit_rollback,current_date
+			yield tps,qps
+
+	def get_max_tables(self,n=10)->tuple:
+		"""
+		获取最大的n(默认10)张表, 比较的是data_length字段, (不含系统库)
+		"""
+		sql = f"""SELECT TABLE_SCHEMA,TABLE_NAME,ENGINE,TABLE_ROWS,DATA_LENGTH,INDEX_LENGTH from INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA NOT IN ('sys','information_schema','mysql','performance_schema') ORDER BY DATA_LENGTH DESC LIMIT {n};"""
+		return self.sql(sql)
+
+	def get_max_dbs(self,n=10)->tuple:
+		"""
+		获取最大的(n)个库的信息
+		"""
+		sql = f"""select bb.*,aa.DEFAULT_CHARACTER_SET_NAME from information_schema.SCHEMATA as aa left join (select table_schema, sum(data_length) as data_length, sum(index_length) as index_length from information_schema.tables where TABLE_SCHEMA not in ('sys','mysql','information_schema','performance_schema') group by table_schema) as bb on aa.SCHEMA_NAME=bb.table_schema where bb.table_schema is not null order by bb.data_length desc limit {n};"""
+		return self.sql(sql)
+
+	def get_same_user_password(self)->tuple:
+		"""
+		返回用户名密码相同的用户. 仅mysql_native_password
+		"""
+		sql = """SELECT CONCAT(user, '@', host) as account FROM mysql.user where authentication_string = CONCAT('*', UPPER(SHA1(UNHEX(SHA1(user)))))"""
+		return self.sql(sql)
+
+	def get_sample_user_password(self,passwordlist=['123456','root','123','000000'])->tuple:
+		sample_user = tuple()
+		for password in passwordlist:
+			sql = f"""SELECT CONCAT(user, '@', host) as account FROM mysql.user where authentication_string = CONCAT('*', UPPER(SHA1(UNHEX(SHA1('{password}')))))"""
+			sample_user += self.sql(sql)
+		return sample_user
 
 class oracle(_dbclass):
 	def __init__(self,*args,**kwargs):
@@ -166,6 +365,10 @@ class benchmark_db:
 		pipe : 压测结果实时反馈通道, None的话就走STDOUT
 		report_interval : 压测结果反馈间隔, 默认10秒
 		max_commit : 初始数据时, 每max_commit提交一次. 默认10000
+		用法:
+			self.prepare() 准备数据
+			self.run() 开始压测
+			self.cleanup() 清理数据
 		"""
 		super().__init__(**kwargs)
 		self.parallel = kwargs['parallel'] if 'parallel' in kwargs else 4
@@ -183,7 +386,7 @@ class benchmark_db:
 
 
 	def printinfo(self,msg):
-		self.msg.append(msg)
+		#self.msg.append(msg)
 		if self.pipe is None:
 			print(msg)
 		else:
@@ -243,24 +446,6 @@ primary key(id)
 
 
 
-	def _get_tps_qps_aux(self,conn)->tuple:
-		cursor = conn.cursor()
-		cursor.execute('show global status')
-		data = cursor.fetchall()
-		queries = 0
-		commit_rollback = 0
-		for x in data:
-			if x[0] == 'Queries':
-				queries = int(x[1])
-			elif x[0] == 'Com_rollback':
-				commit_rollback += int(x[1])
-			elif x[0] == 'Com_commit':
-				commit_rollback += int(x[1])
-			else:
-				continue
-
-		cursor.close()
-		return queries,commit_rollback
 
 	def _monitor(self,):
 		conn = self.get_conn()
