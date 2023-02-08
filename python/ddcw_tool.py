@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 import paramiko
 import pymysql
+import psycopg2 #pip install psycopg2-binary
+#import cx_Oracle
 import base64
 from multiprocessing import Process
 from faker import Faker
 import datetime,time
 import random
 import socket
+import yaml
 
 class HostPortUP(object):
 	def __init__(self,*args,**kwargs):
@@ -332,10 +335,58 @@ class oracle(_dbclass):
 		self.port = 1521 if self.port is None else self.port #设置默认值
 
 	def get_conn(self,):
-		pass
+		try:
+			dsn = cx_Oracle.makedsn(self.host, sekf.port, service_name=self.servicename)
+			conn = cx_Oracle.connect(
+			user=self.user,
+			password=self.password,
+			dsn=dsn,
+			encoding="UTF-8",
+			)
+			self.status = True
+			return conn
+		except Exception as e:
+			self.status = False
+			self.msg = e
+			return False
+
+	def _get_tps_qps_aux(self,conn)->tuple:
+		cursor = conn.cursor() #其实可以只查询一次的, 这里取值 name,value, 但是没得环境就懒得去整了...
+		cursor.execute("select value from V$SYSSTAT where name = 'execute count'")
+		user_query_count = int(list(cursor.fetchall())[0][0])
+		cursor.execute("select value from V$SYSSTAT where name = 'user commits' ")
+		user_commit_count = int(list(cursor.fetchall())[0][0])
+		cursor.execute("select value from V$SYSSTAT where name = 'user rollbacks' ")
+		user_rollback_count = int(list(cursor.fetchall())[0][0])
+		cursor.close()
+		return (user_query_count,user_commit_count+user_rollback_count)
 
 class postgres(_dbclass):
-	pass
+	def __init__(self,*args,**kwargs):
+		super().__init__(**kwargs)
+		self.database = kwargs["database"] if 'database' in kwargs else 'postgres'
+		#self.schema = kwargs["schema"] if 'schema' in kwargs else 'public'
+		self.port = 5432 if self.port is None else self.port
+
+	def get_conn(self):
+		try:
+			conn = psycopg2.connect(
+			host=self.host,
+			port=self.port,
+			user=self.user,
+			password=self.password,
+			database=self.database,
+			)
+			self.status = True
+			return conn
+		except Exception as e:
+			self.status = False
+			self.msg = e
+			return False
+	
+	def _get_tps_qps_aux(self):
+		return 1,1 #benchmark_db未统计内部事务量和查询量, pg貌似也没得com_commit之类的统计. 所以就不显示tps,qps了
+
 
 
 class costcpu:
@@ -591,6 +642,17 @@ class benchmark_mysql(benchmark_db,mysql):
 		#mysql.__init__(self)
 		super().__init__(**kwargs)
 
+class benchmark_postgres(benchmark_db,postgres):
+	"""
+	不熟pg, 自己验证下...
+	"""
+	def __init__(self,*args,**kwargs):
+		super().__init__(**kwargs)
+
+class benchmark_oracle(benchmark_db,oracle):
+	def __init__(self,*args,**kwargs):
+		super().__init__(**kwargs)
+
 class email(HostPortUP):
 	pass
 
@@ -598,7 +660,20 @@ def localcmd(cmd:str)->dict:
 	pass
 
 def read_yaml(filename:str)->dict:
-	pass
+	with open(filename, 'r', encoding="utf-8") as f:
+		inf_data =  f.read()
+	conf = yaml.load(inf_data,Loader=yaml.Loader)
+	return conf
+
+def save_yaml(filename:str,data:dict)->bool:
+	try:
+		with open(filename,'w',encoding='utf-8') as f:
+			yaml.dump(data=data,stream=f,)
+		return True
+	except Exception as e:
+		print(e)
+		return False
+		
 
 def read_conf(filename:str):
 	pass
@@ -670,3 +745,37 @@ def scanport(host='0.0.0.0',start=None,end=None,)->list:
 		except:
 			pass
 	return success_port
+
+class modify_yaml(ssh_sftp):
+	def __init__(self,*args,**kwargs):
+		"""
+		远程修改yaml, 通过ssh把远程服务器上的yaml下载到本地, 修改完成后,再上传回去
+		self.open()  连接ssh,并下载文件到本地
+		self.save()  保存在本地
+		self.close() 保存在本地, 然后上传远程服务器上
+		"""
+		super().__init__(**kwargs) 
+		self.remote_file = kwargs['remote_file'] if 'remote_file' in kwargs else None
+		self.localfilename = f'/tmp/.testfile_{time.time()}'
+		self.data = dict()
+
+	def open(self):
+		if self.remote_file is None:
+			return 'please set remote_file first'
+		if self.conn():
+			self.get(self.remote_file,self.localfilename)
+			self.data = read_yaml(self.localfilename)
+		else:
+			return False
+
+	def save(self):
+		return save_yaml(self.localfilename)
+
+	def close(self):
+		if self.remote_file is None:
+			return 'please set remote_file first'
+		if save_yaml(self.localfilename,self.data):
+			self.put(self.localfilename,self.remote_file)
+			return True
+		else:
+			return False
