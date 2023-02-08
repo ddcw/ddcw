@@ -752,6 +752,7 @@ class modify_yaml(ssh_sftp):
 		远程修改yaml, 通过ssh把远程服务器上的yaml下载到本地, 修改完成后,再上传回去
 		self.open()  连接ssh,并下载文件到本地
 		self.save()  保存在本地
+		self.data    就是yaml文件内容, type:dict
 		self.close() 保存在本地, 然后上传远程服务器上
 		"""
 		super().__init__(**kwargs) 
