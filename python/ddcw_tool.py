@@ -2,14 +2,19 @@
 import paramiko
 import pymysql
 import psycopg2 #pip install psycopg2-binary
-#import cx_Oracle
+import cx_Oracle
 import base64
 from multiprocessing import Process
+from threading import Thread
 from faker import Faker
 import datetime,time
 import random
 import socket
 import yaml
+import subprocess
+import logging
+import os
+import configparser
 
 class HostPortUP(object):
 	def __init__(self,*args,**kwargs):
@@ -71,13 +76,16 @@ class _dbclass(HostPortUP):
 		if not self.isconn:
 			return 'please conn() first'
 		try:
+			#self._conn.begin() #手动开启事务, 但是psycopg2没得begin...
 			cursor = self._conn.cursor()
 			cursor.execute(sql)
 			data = cursor.fetchall()
 			cursor.close()
+			#self._conn.commit() #手动提交
 			self.status = True
 			return data
 		except Exception as e:
+			self._conn.rollback() #出错了就回滚
 			self.msg = e
 			self.status = False
 			return tuple()
@@ -87,6 +95,21 @@ class _dbclass(HostPortUP):
 
 class _shellcmd:
 	def command(self,cmd)->tuple:
+		pass
+
+	def is_localip(self,ip='127.0.0.1')->bool:
+		"""判断IP是否为本地IP"""
+		if ip == '127.0.0.1' or ip == '0.0.0.0' or ip == '::1':
+			return True
+		else:
+			data = self.command("""ip address | grep inet | awk '{print $2}' | awk -F '/' '{print $1}'""")
+			if data[0] == 0:
+				return True if ip in data[1] else False
+			else:
+				return False
+
+	def is_online(self,ip)->bool:
+		"""判断IP是否在线, 使用ping"""
 		pass
 
 	def cpu(self)->dict: 
@@ -203,7 +226,7 @@ class ssh(HostPortUP,_shellcmd):
 				
 					
 
-class ssh_sftp(ssh):
+class sftp(ssh):
 	def get_conn(self):
 		try:
 			tp = paramiko.Transport((self.host,int(self.port)))
@@ -328,6 +351,23 @@ class mysql(_dbclass):
 			sample_user += self.sql(sql)
 		return sample_user
 
+	def get_nopk_table(self):
+		"""获取没得主键的表"""
+		sql = """SELECT aa.TABLE_SCHEMA, aa.TABLE_NAME FROM (SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE    TABLE_SCHEMA NOT IN ('sys','information_schema','mysql','performance_schema')) AS aa LEFT JOIN (SELECT TABLE_SCHEMA, TABLE_NAME FROM    INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE  CONSTRAINT_TYPE = 'PRIMARY KEY'   ) AS bb ON aa.TABLE_SCHEMA = bb.TABLE_SCHEMA    AND aa.TABLE_NAME = bb.TABLE_NAME WHERE bb.TABLE_NAME IS NULL;"""
+		return self.sql(sql)
+
+	def get_big_table(self,datasize=32212254720,rows=10000000):
+		"""
+		获取大表. datasize(32GB)和rows(10,000,000行)同时满足
+		"""
+		sql = f"""select TABLE_SCHEMA,TABLE_NAME,ENGINE,DATA_LENGTH,TABLE_ROWS from information_schema.tables where TABLE_ROWS > {rows} and DATA_LENGTH > {datasize}; """
+		return self.sql(sql)
+
+	def get_fragment_table(self,rate=40):
+		"""碎片表,  rate碎片率, DATA_FREE/(DATA_LENGTH+DATA_FREE) """
+		sql = f"""select * from (select TABLE_SCHEMA,TABLE_NAME,DATA_LENGTH,DATA_FREE,round(DATA_FREE/(DATA_LENGTH+DATA_FREE)*100,2) as fragment_rate from information_schema.tables where DATA_LENGTH>0 and TABLE_SCHEMA not in ('sys','information_schema','mysql','performance_schema')) as aa where aa.fragment_rate > {rate}; """
+		return self.sql(sql)
+
 class oracle(_dbclass):
 	def __init__(self,*args,**kwargs):
 		super().__init__(**kwargs)
@@ -336,7 +376,7 @@ class oracle(_dbclass):
 
 	def get_conn(self,):
 		try:
-			dsn = cx_Oracle.makedsn(self.host, sekf.port, service_name=self.servicename)
+			dsn = cx_Oracle.makedsn(self.host, self.port, service_name=self.servicename)
 			conn = cx_Oracle.connect(
 			user=self.user,
 			password=self.password,
@@ -368,6 +408,29 @@ class postgres(_dbclass):
 		#self.schema = kwargs["schema"] if 'schema' in kwargs else 'public'
 		self.port = 5432 if self.port is None else self.port
 
+	def sql(self,sql)->tuple:
+		"""
+		必须先self.conn()
+		"""
+		if not self.isconn:
+			return 'please conn() first'
+		try:
+			cursor = self._conn.cursor()
+			cursor.execute(sql)
+			try:
+				data = cursor.fetchall()
+			except:
+				data = tuple()
+			cursor.close()
+			self._conn.commit() #手动提交
+			self.status = True
+			return data
+		except Exception as e:
+			self._conn.rollback() #出错了就回滚
+			self.msg = e
+			self.status = False
+			return tuple()
+
 	def get_conn(self):
 		try:
 			conn = psycopg2.connect(
@@ -384,25 +447,53 @@ class postgres(_dbclass):
 			self.msg = e
 			return False
 	
-	def _get_tps_qps_aux(self):
+	def _get_tps_qps_aux(self,conn):
 		return 1,1 #benchmark_db未统计内部事务量和查询量, pg貌似也没得com_commit之类的统计. 所以就不显示tps,qps了
 
 
 
 class costcpu:
-	def __init__(self,n:int,action:int):
+	def __init__(self,n=1,action=1):
 		"""
 		n : 并发数
 		action : 1:多进程, 2:多线程
 		"""
-		self.n = n
-		self.action = action 
+		self._n = n
+		self._action = action 
+		self.pdict = {}
+		for x in range(self._n):
+			if self._action == 1:
+				self.pdict[x] = Process(target=self.cost)
+			else:
+				self.pdict[x] = Thread(target=self.cost)
+	def cost(self):
+		while True:
+			try:
+				aa = random.random()*random.random()
+			except:
+				pass
+
 	def start(self):
-		pass
+		for x in range(self._n):
+			self.pdict[x].start()
+
 	def stop(self):
-		pass
+		for x in range(self._n):
+			self.pdict[x].terminate()
 
+class costmem:
+	def __init__(self,memsize=1*1024*1024):
+		self.memsize = memsize
+		self._data = ''
+	def start(self):
+		self._data = ' '*(self.memsize)
 
+	def stop(self,):
+		del self._data
+		self._data = ''
+
+	def clean(self):
+		return self.stop()
 
 class benchmark_db:
 	def __init__(self,*args,**kwargs):
@@ -474,6 +565,7 @@ class benchmark_db:
 		cursor = conn.cursor()
 		for x in range(1,self.tables+1):
 			tablename = f'{self.table_basename}_{x}' #数据库名由mysql连接的时候指定的
+			#oracle 不支持create table if not exists 所以继承过去之后要重写哈
 			create_table_sql = f"""create table if not exists {tablename}(
 id int,
 name varchar(50),
@@ -483,10 +575,11 @@ email varchar(100),
 primary key(id)
 )"""
 			cursor.execute(create_table_sql)
-			#cursor.fetchall()
 			self.printinfo(f'{tablename} create success.')
 		cursor.close()
+		conn.commit() #pg要手动提交, 不然ddl未执行成功....
 		conn.close()
+
 		insert_work = {}
 		for x in range(1,self.tables+1):
 			insert_work[x] = Process(target=self._prepare_insert,args=(x,))
@@ -603,7 +696,7 @@ primary key(id)
 
 
 	def run(self):
-		if self.database is None:
+		if not hasattr(self,'servicename') and self.database is None :
 			return 'database is None'
 		self.msg = [] #清空
 		#parallel:压测  还有个进程负责监控
@@ -643,9 +736,6 @@ class benchmark_mysql(benchmark_db,mysql):
 		super().__init__(**kwargs)
 
 class benchmark_postgres(benchmark_db,postgres):
-	"""
-	不熟pg, 自己验证下...
-	"""
 	def __init__(self,*args,**kwargs):
 		super().__init__(**kwargs)
 
@@ -653,11 +743,170 @@ class benchmark_oracle(benchmark_db,oracle):
 	def __init__(self,*args,**kwargs):
 		super().__init__(**kwargs)
 
-class email(HostPortUP):
-	pass
+	def _prepare_insert(self,n):
+		fake = Faker(locale='zh_CN') #中文
+		conn = self.get_conn()
+		cursor = conn.cursor()
+		tablename = f'{self.table_basename}_{n}'
+		commit_rows = 0
+		for x in range(1,self.rows+1):
+			sql = f'insert into {tablename} values(:1,:2,:3,:4,:5)'
+			values = (x, fake.name(), fake.date_of_birth(minimum_age=18, maximum_age=65), fake.address(), fake.email(), )
+			cursor.execute(sql, values)
+			if commit_rows >= self.max_commit:
+				conn.commit()
+				commit_rows = 0
+			else:
+				commit_rows += 1
+		cursor.close()
+		conn.commit()
+		cursor = conn.cursor()
+		index_sql = f'create index {tablename}_email on {tablename}(email)'
+		cursor.execute(index_sql)
+		conn.commit()
+		conn.close()
+		self.printinfo(f'{tablename} table data insert completed.')
+	def prepare(self,):
+		conn = self.get_conn() 
+		cursor = conn.cursor()
+		for x in range(1,self.tables+1):
+			tablename = f'{self.table_basename}_{x}'
+			#oracle 不支持if not exists
+			create_table_sql = f"""create table {tablename}(
+id int,
+name varchar2(50),
+birthday date,
+addr varchar2(100),
+email varchar2(100),
+primary key(id)
+)"""
+			try:
+				cursor.execute(create_table_sql)
+				self.printinfo(f'{tablename} create success.')
+			except Exception as e:
+				self.printinfo(f'{tablename} create faild. maybe exists. ERROR:{e}')
+		cursor.close()
+		conn.commit() #pg要手动提交, 不然ddl未执行成功....
+		conn.close()
 
-def localcmd(cmd:str)->dict:
-	pass
+		insert_work = {}
+		for x in range(1,self.tables+1):
+			insert_work[x] = Process(target=self._prepare_insert,args=(x,))
+		for x in range(1,self.tables+1):
+			insert_work[x].start()
+		for x in range(1,self.tables+1):
+			insert_work[x].join()
+
+	def benchmark(self):
+		fake = Faker(locale='zh_CN')
+		if self.trx_type == 1: #混合读写 10主键读, 4范围读, 2:update 1:delete 1:insert
+			self.printinfo('start read and write.')
+			conn = self.get_conn()
+			while True:
+				begintime = time.time()
+				try:
+					cursor = conn.cursor()
+					tablename = f'{self.table_basename}_{random.randint(1,self.tables)}'
+					for i in range(10):
+						id_sql = f'select * from {tablename} where id=:1'
+						cursor.execute(id_sql,(random.randint(1,self.rows),))
+						#_data = cursor.fetchall()
+					for j in range(4):
+						range_sql = f'select * from {tablename} where id>=:1 and id < :2'
+						_id = random.randint(1,self.rows)
+						cursor.execute(range_sql,(_id,_id+10))
+						#_data = cursor.fetchall()
+					update_sql1 = f'update {tablename} set email=:1 where id=:2'
+					cursor.execute(update_sql1,(fake.email(),random.randint(1,self.rows)))
+					#_data = cursor.fetchall()
+					update_sql2 = f'update {tablename} set name=:1 where id=:2'
+					cursor.execute(update_sql2,(fake.name(),random.randint(1,self.rows)))
+					#_data = cursor.fetchall()
+					delete_id = random.randint(1,self.rows)
+					delete_sql = f'delete from {tablename} where id=:1'
+					cursor.execute(delete_sql,(delete_id,))
+					insert_sql = f'insert into {tablename} values(:1,:2,:3,:4,:5)'
+					values = (delete_id, fake.name(), fake.date_of_birth(minimum_age=18, maximum_age=65), fake.address(), fake.email(), )
+					cursor.execute(insert_sql,values)
+					#_data = cursor.fetchall()
+					conn.commit()
+					cursor.close()
+				except Exception as e:
+					self.printinfo(e)
+					#time.sleep(1)
+					pass #error+1 TODO
+			conn.close()
+		elif self.trx_type == 2:
+			conn = self.get_conn()
+			self.printinfo('start read only.')
+			while True:
+				try:
+					cursor = conn.cursor()
+					tablename = f'{self.table_basename}_{random.randint(1,self.tables)}'
+					for i in range(10):
+						id_sql = f'select * from {tablename} where id=:1'
+						cursor.execute(id_sql,(random.randint(1,self.rows),))
+						#_data = cursor.fetchall()
+					for j in range(4):
+						range_sql = f'select * from {tablename} where id>=:1 and id < :2'
+						_id = random.randint(1,self.rows)
+						cursor.execute(range_sql,(_id,_id+10))
+						#_data = cursor.fetchall()
+					cursor.close()
+					conn.commit()
+				except Exception as e:
+					pass #error+1 TODO
+			conn.close()
+		elif self.trx_type == 3:
+			conn = self.get_conn()
+			self.printinfo('start write only.')
+			while True:
+				try:
+					cursor = conn.cursor()
+					tablename = f'{self.table_basename}_{random.randint(1,self.tables)}'
+					update_sql1 = f'update {tablename} set email=:1 where id=:2'
+					cursor.execute(update_sql1,(fake.email(),random.randint(1,self.rows)))
+					_data = cursor.fetchall()
+					update_sql2 = f'update {tablename} set name=:1 where id=:2'
+					cursor.execute(update_sql2,(fake.name(),random.randint(1,self.rows)))
+					_data = cursor.fetchall()
+					delete_id = random.randint(1,self.rows)
+					delete_sql = f'delete from {tablename} where id=:1'
+					cursor.execute(delete_sql,(delete_id,))
+					insert_sql = f'insert into {tablename} values(:1,:2,:3,:4,:5)'
+					values = (delete_id, fake.name(), fake.date_of_birth(minimum_age=18, maximum_age=65), fake.address(), fake.email(), )
+					cursor.execute(insert_sql,values)
+					_data = cursor.fetchall()
+					conn.commit()
+					cursor.close()
+				except Exception as e:
+					self.printinfo(e)
+					pass #error+1 TODO
+			conn.close()
+				
+		else:
+			return
+	def cleanup(self):
+		"""
+		清理数据
+		"""
+		conn = self.get_conn() 
+		cursor = conn.cursor()
+		for x in range(1,self.tables+1):
+			tablename = f'{self.table_basename}_{x}' #数据库名由mysql连接的时候指定的
+			delete_table_sql = f"""drop table {tablename}"""
+			try:
+				cursor.execute(delete_table_sql)
+				_data = cursor.fetchall()
+			except:
+				pass
+		conn.commit()
+		cursor.close()
+		conn.close()
+		self.printinfo('clean table success.')
+
+class email(HostPortUP):
+	pass #TODO
 
 def read_yaml(filename:str)->dict:
 	with open(filename, 'r', encoding="utf-8") as f:
@@ -675,29 +924,55 @@ def save_yaml(filename:str,data:dict)->bool:
 		return False
 		
 
-def read_conf(filename:str):
-	pass
+def read_conf(filename:str)->dict:
+	_config = configparser.ConfigParser()
+	_config.read(filename)
+	data = {}
+	for x in _config._sections:
+		data[x] = dict(_config._sections[x])
+	return data
+
+def save_conf(filename:str,config:dict)->bool:
+	"""没做异常处理"""
+	parser = configparser.ConfigParser()
+	parser.read_dict(config)
+	with open(filename, 'w') as configfile:
+		parser.write(configfile)
+	return True
 
 def sendpack_tcp(host:str,port:int,bdata:bytes)->bool:
-	pass
+	"""发送二进制数据到目标服务器, 不接受回包."""
+	return_status = False
+	try:
+		conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		conn.connect((host,port))
+		if conn.send(bdata) == len(bdata):
+			return_status = True
+		conn.close()
+		return return_status
+	except:
+		return False
 
-def getlog(filename:str,logformat):
-	pass
+def getlog(filename='/tmp/.testbyddcw.log',logformat='%(asctime)s %(levelname)s %(message)s'):
+	logging.basicConfig(level=logging.INFO,format=logformat,filename=filename)
+	log = logging.getLogger('ddcwlog')
+	return log
 
-def absfilename(filename:str)->str:
+def file_abs(filename:str)->str:
 	"""返回文件的绝对路径"""
-	pass
+	return os.path.abspath(filename)
 
-def dirfilename(filename:str)->str:
+def file_dir(filename:str)->str:
 	"""返回文件的路径"""
-	pass
+	return os.path.dirname(filename)
 
-def namefilename(filename:str)->str:
+def file_name(filename:str)->str:
 	"""返回文件名"""
-	pass
+	return os.path.basename(filename)
 
 def parse_binlog(binlog)->list:
-	"""解析binlog"""
+	"""解析binlog. 这是要干嘛呢... 我忘了, 后面想起来了再实现吧.... -_-"""
+	pass
 
 def encrypt(k,salt=None)->bytes:
 	'''
@@ -746,14 +1021,14 @@ def scanport(host='0.0.0.0',start=None,end=None,)->list:
 			pass
 	return success_port
 
-class modify_yaml(ssh_sftp):
+class remote_yaml(sftp):
 	def __init__(self,*args,**kwargs):
 		"""
 		远程修改yaml, 通过ssh把远程服务器上的yaml下载到本地, 修改完成后,再上传回去
 		self.open()  连接ssh,并下载文件到本地
-		self.save()  保存在本地
+		self.save()  保存在本地, 然后上传到远端服务器上.
 		self.data    就是yaml文件内容, type:dict
-		self.close() 保存在本地, 然后上传远程服务器上
+		self.close() 断开ssh连接.(不保存...)
 		"""
 		super().__init__(**kwargs) 
 		self.remote_file = kwargs['remote_file'] if 'remote_file' in kwargs else None
@@ -770,9 +1045,6 @@ class modify_yaml(ssh_sftp):
 			return False
 
 	def save(self):
-		return save_yaml(self.localfilename)
-
-	def close(self):
 		if self.remote_file is None:
 			return 'please set remote_file first'
 		if save_yaml(self.localfilename,self.data):
@@ -780,3 +1052,16 @@ class modify_yaml(ssh_sftp):
 			return True
 		else:
 			return False
+
+class localcmd(_shellcmd):
+	def __init__(self,*args,**kwargs):
+		#super().__init__(**kwargs) 
+		self.timeout = kwargs['timeout'] if 'timeout' in kwargs else 1200
+
+	def command(self,cmd)->tuple: #(exit_code,strout,stderr)
+		with subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as f:
+			try:
+				return f.wait(self.timeout),str(f.stdout.read().rstrip(),encoding="utf-8"),str(f.stderr.read().rstrip(),encoding="utf-8")
+			except Exception as e:
+				f.kill()
+				return -1,e,str(f.stderr.read().rstrip(),encoding="utf-8")
