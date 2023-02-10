@@ -162,7 +162,30 @@ class _shellcmd:
 		else:
 			return {'status':False,'msg':data[2]}
 
-		
+	def get_proc_by_mem(self,n=10)->list:
+		"""
+		获取内存使用最多的n个进程信息(默认10) 注:VmRSS单位是KB
+		参考:https://www.kernel.org/doc/html/latest/filesystems/proc.html
+		"""
+		data = self.command("""for procnum in /proc/[0-9]*; do Name=`awk '{ if ($1=="Name:") print $2}' ${procnum}/status`; VmRSS=`awk '{ if ($1=="VmRSS:") print $2}' ${procnum}/status`; Pid=`awk '{ if ($1=="Pid:") print $2}' ${procnum}/status`; PPid=`awk '{ if ($1=="PPid:") print $2}' ${procnum}/status`; State=`awk '{ if ($1=="State:") print $2}' ${procnum}/status`; if [ ${VmRSS} > 0 ];then echo "${Name} ${VmRSS} ${Pid} ${PPid} ${State}"; fi; done | sort -r -n -k 2 | head -"""+f"{n}")
+		returndata = []
+		if data[0] == 0:
+			for x in data[1].split('\n'):
+				Name,VmRSS,Pid,PPid,State = x.split()
+				returndata.append({'Name':Name,'VmRSS':VmRSS,'Pid':Pid,'PPid':PPid,'State':State})
+		return returndata
+
+	def get_proc_by_cpu(self,n=10)->list:
+		"""
+		获取cpu使用时间最多的n个进程信息(默认10): utime + stime + cutime + cstime
+		"""
+		data = self.command("""for procnum in /proc/[0-9]*; do awk '{print $2,$1,$4,$3,$14+$15+$16+$17}' ${procnum}/stat; done | sort -r -n -k 5 | head -"""+f"{n}")
+		returndata = []
+		if data[0] == 0:
+			for x in data[1].split('\n'):
+				Name,Pid,PPid,State,Cputime = x.split()
+				returndata.append({'Name':Name,'Pid':Pid,'PPid':PPid,'State':State,'Cputime':Cputime})
+		return returndata
 
 
 class ssh(HostPortUP,_shellcmd):
