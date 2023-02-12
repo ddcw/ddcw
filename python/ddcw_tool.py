@@ -187,6 +187,27 @@ class _shellcmd:
 				returndata.append({'Name':Name,'Pid':Pid,'PPid':PPid,'State':State,'Cputime':Cputime})
 		return returndata
 
+	def get_net_rate(self,):
+		"""单位:字节  (Receive,Transmit)"""
+		_cmd = """tail -n +3 /proc/net/dev | awk '{print $1,$2,$10}' | sed 's/://'"""
+		net_rec_tra = {}
+		for x in self.command(_cmd)[1].split('\n'):
+			interface,receive,transmit = x.split()
+			net_rec_tra[interface] = (int(receive),int(transmit))
+		lasttime = time.time()
+		time.sleep(0.1)
+		while True:
+			net_rate = {}
+			data = self.command(_cmd)
+			current_time = time.time()
+			time_diff = current_time - lasttime
+			lasttime = current_time
+			for x in data[1].split('\n'):
+				interface,receive,transmit = x.split()
+				net_rate[interface] = (round((int(receive)-net_rec_tra[interface][0])/time_diff,2), round((int(transmit)-net_rec_tra[interface][1])/time_diff,2),)
+				net_rec_tra[interface] = (int(receive),int(transmit))
+			yield net_rate
+
 
 class ssh(HostPortUP,_shellcmd):
 	def __init__(self,*args,**kwargs):
