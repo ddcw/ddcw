@@ -87,7 +87,7 @@ function print_rate() {
 			rate4=$(ifconfig $i | grep 'TX packets' | awk '{print $5}')
 			eval export ${i}_rate1=${rate2}
 			rates_rev=$[ ${rate2} - ${rate1} ]
-			rates_sen=$[ ${rate2} - ${rate1} ]
+			rates_sen=$[ ${rate4} - ${rate3} ]
 			[[ ${rates_rev} -lt ${min_rate} ]] && continue
 			echo  -e "$i \t ${rates_rev} bytes/s \t \033[31;40m $[ ${rates_rev} / 1024 ]\033[0m KB/s \t $[ ${rates_rev} / 1024 /1024 ] MB/s \t\t${rates_sen}  bytes/s \t \033[31;40m $[ ${rates_sen} / 1024 ]\033[0m KB/s \t $[ ${rates_sen} / 1024 /1024 ] MB/s"
 		done
