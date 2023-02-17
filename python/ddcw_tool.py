@@ -90,6 +90,24 @@ class _dbclass(HostPortUP):
 			self.status = False
 			return tuple()
 
+	def sql_dict(self,sql)->list:
+		"""return like [{col1:value, col2:value,...},{col1:value, col2:value}]"""
+		if not self.isconn:
+			return 'please conn() first'
+		try:
+			cursor = self._conn.cursor()
+			cursor.execute(sql)
+			colname = [col[0] for col in cursor.description]
+			data = [ dict(zip(colname,row)) for row in cursor.fetchall() ]
+			cursor.close()
+			self.status = True
+			return data
+		except Exception as e:
+			self._conn.rollback()
+			self.msg = e
+			self.status = False
+			return tuple()
+
 	def execute(self,command):
 		return self.sql(command)
 
@@ -1109,3 +1127,321 @@ class localcmd(_shellcmd):
 			except Exception as e:
 				f.kill()
 				return -1,e,str(f.stderr.read().rstrip(),encoding="utf-8")
+
+
+
+def get(url):
+	pass
+
+def post(url,data):
+	pass
+
+def tcpdump(interface=None,rule=None):
+	pass
+
+class mysql_ms:
+	def __init__(self,*args,**kwargs):
+		"""
+		输入n个mysql数据库信息,可以是 ddcw_tool.mysql对象, 也可以是(host,port,username,password)的元组形式
+		若只给了一个mysql从库信息, 当self.auto_conn = True(默认)的时候, 会自动获取主库信息,但获取不了其它从库信息(找不到端口)
+		只支持1主N从. 不支持多主/主主
+		"""
+		db_info = {}
+		for x in args:
+			if isinstance(x,mysql):
+				name = f'{x.host}_{x.port}'
+				db_info[name] = {'host':x.host,'port':x.port,'user':x.user,'password':x.password}
+			elif isinstance(x,tuple):
+				name = f'{x[0]}_{x[1]}'
+				db_info[name] = {'host':x[0],'port':x[1],'user':x[2],'password':x[3]}
+			else:
+				pass
+		self._db_base_info = db_info
+		self._reset_slave = False #默认不执行reset slave
+		self._set_read_only = False #默认不手动设置从库只读
+		self.master = tuple()
+		self.slave = tuple()
+		self.__conn__ = dict() #数据库连接信息
+		self.msg = ''
+		self.status = False
+		self.auto_conn = True #True:自动连接相关的其它节点,并参加选主.  False不连接,也不参与选主
+		self._ignore_master = tuple() #((host,port),(host,port)) 这些主库将不被计算在主库数量上. 主库只能有一个
+		self.wait = 3 #默认等待3秒事务完成,然后就kill
+		self.user = None #用于主从复制的账号, 为空的时候, self._update会自动更新
+		self.password = None #用于主从复制的密码
+	
+	def conn(self)->bool:
+		"""连接到mysql, 并获取主从相关信息"""
+		new_db_info = {}
+		_db_base_info = self._db_base_info
+		for name in _db_base_info:
+			_tmp_mysql = mysql(host=_db_base_info[name]['host'],port=_db_base_info[name]['port'],user=_db_base_info[name]['user'],password=_db_base_info[name]['password'])
+			if _tmp_mysql.conn():
+				self.__conn__[name] = _tmp_mysql
+				for master in _tmp_mysql.sql('select Host,Port,User_name,User_password,Channel_name,Uuid from mysql.slave_master_info where port !=0;'):
+					_name = f'{master[0]}_{master[1]}'
+					if _name not in self._db_base_info:
+						new_db_info[_name] = master
+					self.user = master[2] if self.user is None else self.user
+					self.password = master[3] if self.password is None else self.password
+				#select HOST,USER from information_schema.processlist where COMMAND = 'Binlog Dump'; #看不到从库的db端口.就不看了
+			else:
+				self.status = False
+				self.msg = _tmp_mysql.msg
+				return self.status
+		if self.auto_conn:
+			for name in new_db_info:
+				_tmp_mysql = mysql(host=new_db_info[name][0],port=new_db_info[name][1],user=new_db_info[name][2],password=new_db_info[name][3])
+				if _tmp_mysql.conn():
+					self.__conn__[name] = _tmp_mysql
+				else:
+					pass
+		return self._update()
+
+	def _update(self)->bool:
+		"""更新self.master and self.slave"""
+		#找到主库, 最多只能有一个主库
+		for name in self.__conn__:
+			for master in self.__conn__[name].sql('select Host,Port,User_name,User_password,Channel_name,Uuid from mysql.slave_master_info where port !=0;'):
+				if (master[0],master[1]) not in self._ignore_master and (master[0],master[1]) not in self.master:
+					self.master += ((master[0],master[1]),)
+
+		if len(self.master) > 1:
+			self.status = False
+			self.msg = f'there have more than 1 master. {self.master}'
+			return self.status
+
+		#找到从库
+		self.slave = tuple() #先清空信息
+		for name in self.__conn__:
+			_db_base_info = self._db_base_info
+			for slave in _db_base_info:
+				host,port = _db_base_info[slave]['host'],_db_base_info[slave]['port']
+				if (host,port) not in self.master and (host,port) not in self.slave:
+					self.slave += ((host,port),)
+
+		#验证复制账号是否能登录. 
+		#算了, 不验证了, 有可能限制了IP的....
+
+		self.status = True
+		return self.status
+
+
+	def get_delay(self,obj=[]):
+		data = self.slave_detail(obj)
+		return [(x['host'],x['port'],x['slave_status']['Seconds_Behind_Master']) for x in data ]
+
+	def get_delay_gtid(self,obj=[]):
+		"""返回主从之间相差的gtid数"""
+		master_name = f'{self.master[0][0]}_{self.master[0][1]}'
+		server_uuid = self.master_detail()['uuid']
+		obj = self.slave if len(obj) == 0 else obj
+		slave_list = []
+		for slave in obj:
+			name = f'{slave[0]}_{slave[1]}'
+			gtid_executed = self.__conn__[name].sql('select @@GLOBAL.gtid_executed;')[0][0]
+			slave_gtid_executed = [ x.split(',')[0] for x in gtid_executed.split() if x.split(':')[0]==server_uuid ][0]
+			master_gtid_executed = self.__conn__[master_name].sql('select @@GLOBAL.gtid_executed;')[0][0]
+			master_gtid_executed = [ x.split(',')[0] for x in master_gtid_executed.split() if x.split(':')[0]==server_uuid ][0]
+			sql = f"select GTID_SUBTRACT('{master_gtid_executed}','{slave_gtid_executed}')"
+			gtid = self.__conn__[name].sql(sql)[0][0]
+			slave_list.append({'host':slave[0],'port':slave[1],'gtid_diff':gtid,'master_gtid':master_gtid_executed,'slave_gtid':slave_gtid_executed})
+		return slave_list
+
+	def get_status(self,obj=[])->tuple:
+		data = self.slave_detail(obj)
+		return [(x['host'],x['port'],x['slave_status']['Slave_IO_Running'],x['slave_status']['Slave_SQL_Running'],x['slave_status']['Auto_Position']) for x in data ]
+
+	def get(self):
+		return {'master':self.master,'slave':self.slave}
+
+	def master_detail(self)->dict:
+		master_name = f'{self.master[0][0]}_{self.master[0][1]}'
+		slave_conn = self.__conn__[master_name].sql("select HOST,USER,STATE from information_schema.processlist where COMMAND = 'Binlog Dump';")
+		uuid = self.__conn__[master_name].sql('select @@server_uuid;')[0][0]
+		version = self.__conn__[master_name].sql('select @@version;')[0][0]
+		return {'host':self.master[0][0], 'port':self.master[0][1], 'slave_conn':slave_conn, 'uuid':uuid, 'version':version }
+
+	def slave_detail(self,obj=[])->list:
+		""" 
+		obj:[(host,port),(host,port)]指定的从库信息, 默认空, 表示取所有
+		注: Seconds_Behind_Master可能不准, 甚至有可能为负数,这跟它的计算方式有关.
+		"""
+		obj = self.slave if len(obj) == 0 else obj
+		slaveinfo = []
+		for slave in obj:
+			name = f'{slave[0]}_{slave[1]}'
+			#print(name)
+			uuid = self.__conn__[name].sql('select @@server_uuid;')[0][0]
+			version = self.__conn__[name].sql('select @@version;')[0][0]
+			_slave_info = self.__conn__[name].sql_dict('show slave status') #可能与多个主从的信息
+			_slave_info = [ x for x in _slave_info if (x['Master_Host'],x['Master_Port']) in self.master ] #只要和self.master相关的
+			if len(_slave_info) > 0:
+				slaveinfo.append({'host':slave[0], 'port':slave[1], 'version':version, 'uuid':uuid, 'slave_status':_slave_info[0]})
+		return slaveinfo
+
+	def _clean_to_gtid(self,gtid_execute)->int:
+		return int(gtid_execute.split(':')[-1].split('-')[-1])
+				
+	
+	def switch(self,master=None)->bool:
+		"""
+		master=(host,port)  若为None, 则自动选择
+		切换流程:
+		1. 主库设置为只读,等待当前事务提交完成(默认3秒), kill所有连接(不含system user),包含ddcw_tool.mysql的, 所以要记得重连哈
+		2. 选择新主(只有1个就不选了), 等待新主执行完relay log, 然后记录master status
+		3. 校验数据(可选),这里就不做了, 也可以参考我之前写的数据校验脚本
+		4. 新主:stop slave; reset slave all(可选); set global read_only=ON;
+		5. 关闭旧主库shutdown(可选), 这里就不做了.
+		6. 等待其它从库完成relay log, 然后change master到新主库.(均不使用channel)
+		7. self._update
+		"""
+		if master not in self.slave and master is not None:
+			self.status = False
+			self.msg = f'{master} not in {self.slave}'
+			return self.status
+
+		if len(self.slave) == 1:
+			master = self.slave
+		elif len(self.slave) == 0:
+			self.status = False
+			self.msg = f'no slave to switch to master'
+			return self.status
+		else:
+			pass
+		old_master = self.master
+		print(f'master:{self.master[0]} before switch.')
+		print('stop old master')
+		self._stop_master()
+		print('choose master if not exists.')
+		master = self._chosen_one() if master is None else master
+		print('wait new master to complete relay log',master)
+		new_master_info = self._wait_new_master(master)
+		print('check data')
+		self._checkdata(new_master_info[2])
+		print('new master set read write')
+		self._new_master_set(master)
+		print('set slave to new master')
+		change_master = f"""CHANGE MASTER TO MASTER_HOST='{master[0][0]}',MASTER_PORT={master[0][1]},MASTER_USER='{self.user}',MASTER_PASSWORD='{self.password}',master_log_file='{new_master_info[0]}',master_log_pos={new_master_info[1]};"""
+		self._change_new_master(change_master)
+		print('set old master to new master')
+		self._old_master_to_slave(change_master,old_master)
+		self._update()
+		print(f'master:{self.master[0]} after switch.')
+
+	def _stop_master(self)->bool:
+		"""停主"""
+		master_name = f'{self.master[0][0]}_{self.master[0][1]}'
+		self.__conn__[master_name].sql('set global read_only=ON;')
+		self.__conn__[master_name].sql('set global super_read_only=ON;') 
+		self.__conn__[master_name].sql('stop slave;')
+		self.__conn__[master_name].sql('reset slave all;') #重置主从状态 
+		#self.__conn__[master_name].sql('flush tables with read lock;')  #若这里加了的话, 切换完成后记得 unlcok tables;
+		time.sleep(self.wait)
+		this_mid = self.__conn__[master_name].sql('select connection_id();')[0][0]
+		#获取普通连接的id, 并kill掉
+		for mid in self.__conn__[master_name].sql("select id from information_schema.processlist where User != 'system user';"):
+			if mid[0] != this_mid: #我不kill自己的id 这样就不用重连了.
+				#print(f'{this_mid}: kill {mid}')
+				kill_sql = f'kill {mid[0]};'
+				self.__conn__[master_name].sql(kill_sql)
+		return True
+
+	def _chosen_one(self)->tuple:
+		"""
+		选主 return tuple
+		比较来自server的gtid呢, 还是比较Seconds_Behind_Master呢
+		-- select @@GLOBAL.gtid_executed;
+		"""
+		#还是用gtid吧, 可以执行空gtid来跳过之前没有的信息, 这里不返回gtid信息和binlog信息. 由self.switch去获取,因为可能是手动设置的新主库
+		max_gtid = 0
+		name = tuple()
+		for x in self.get_delay_gtid():
+			#_gtid = int(x['slave_gtid'].split(':')[-1].split('-')[-1])
+			_gtid = self._clean_to_gtid(x['slave_gtid'])
+			if _gtid > max_gtid:
+				max_gtid = _gtid
+				name = (x['host'],x['port'])
+		return name
+
+	def _wait_new_master(self,new_master):
+		"""等待新主跑完relay log 然后返回master info 和gtid信息"""
+		while True:
+			sql_thread = self.slave_detail(new_master)[0]['slave_status']['Slave_SQL_Running_State']
+			if sql_thread == 'Slave has read all relay log; waiting for more updates':
+				break
+			else:
+				time.sleep(1)
+		new_master_name = f"{new_master[0][0]}_{new_master[0][1]}"
+		data = self.__conn__[new_master_name].sql_dict('show master status;')[0]
+		new_master_uuid = uuid = self.__conn__[new_master_name].sql('select @@server_uuid;')[0][0]
+		gtid_executed = [ x.split(',')[0] for x in data['Executed_Gtid_Set'].split() if x.split(':')[0]==new_master_uuid ][0]
+		return (data['File'],data['Position'],self._clean_to_gtid(gtid_executed))
+
+	def _checkdata(self,new_master_gtid):
+		"""主从数据校验, 校验旧主和新主数据是否一直. 这里就不校验了. 比较下最大的gtid信息即可. 不一致就返回False"""
+		master_name = f'{self.master[0][0]}_{self.master[0][1]}'
+		server_uuid = self.master_detail()['uuid']
+		master_gtid_executed = self.__conn__[master_name].sql('select @@GLOBAL.gtid_executed;')[0][0]
+		master_gtid_executed = [ x.split(',')[0] for x in master_gtid_executed.split() if x.split(':')[0]==server_uuid ][0]
+		old_master_gtid = self._clean_to_gtid(master_gtid_executed)
+		return True if new_master_gtid == old_master_gtid else False
+
+	def _new_master_set(self,new_master):
+		"""新主库设置, read_only=OFF,  self.master=xxx slave信息后面再更新"""
+		master_name = f'{new_master[0][0]}_{new_master[0][1]}'
+		self.__conn__[master_name].sql('stop slave;') #先停主从
+		self.__conn__[master_name].sql('reset slave all;') #先停主从
+		self.__conn__[master_name].sql('set global read_only = OFF;')
+		self.__conn__[master_name].sql('set global super_read_only = OFF;')
+		self._old_master = self.master #旧的先保存下来, 后面要用
+		self.master = tuple(new_master,)
+		return True
+
+	def _change_new_master(self,change_master):
+		"""等待其它从库执行完relay log然后 change master to new master. 使用gtid的话, 先set gtid_next=xxx begin;commit;"""
+		timeout = 60
+		n = 0
+		_tmp_slave = list(self.slave)
+		_tmp_slave.remove(self.master[0]) 
+		while n <= timeout:
+			if len(_tmp_slave) == 0:
+				break
+			for x in _tmp_slave[:]:
+				name = f'{x[0]}_{x[1]}'
+				slave_dict = self.__conn__[name].sql_dict('show slave status')
+				for y in slave_dict:
+					if y['Master_Host'] == self._old_master[0][0] and y['Master_Port'] == self._old_master[0][1] and y['Slave_SQL_Running_State'] == 'Slave has read all relay log; waiting for more updates':
+						self.__conn__[name].sql('stop slave;')
+						self.__conn__[name].sql(change_master)
+						self.__conn__[name].sql('start slave;')
+						_tmp_slave.remove(x)
+						print(x,'complete')
+			time.sleep(1)
+			n += 1
+
+	def _vip_change(self):
+		"""切换VIP. 自己取整. """
+		pass
+
+	def _old_master_to_slave(self,change_master,old_master):
+		"""在旧主库上, unlock tables. change master to 这步执行完了, 上层调用记得self._update下"""
+		name = f"{old_master[0][0]}_{old_master[0][1]}"
+		self.__conn__[name].sql('unlock tables')
+		self.__conn__[name].sql('stop slave')
+		self.__conn__[name].sql(change_master)
+		#print(change_master,name)
+		self.__conn__[name].sql('start slave')
+		return True
+
+	
+	def close(self)->bool:
+		self.msg = []
+		self.status = True
+		for x in self.__conn__:
+			try:
+				self.__conn__[x].close()
+			except Exception as e:
+				self.status = False
+				self.msg.append(e)
+		return self.status
