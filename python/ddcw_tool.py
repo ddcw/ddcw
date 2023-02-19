@@ -15,6 +15,7 @@ import subprocess
 import logging
 import os
 import configparser
+from string import Template
 
 class HostPortUP(object):
 	def __init__(self,*args,**kwargs):
@@ -227,13 +228,45 @@ class _shellcmd:
 			yield net_rate
 
 
+	def stop_firewall(self,disable=True)->bool:
+		"""关闭防火墙. disable=True禁止开启启动"""
+		self.command('systemctl stop firewalld')
+		self.command('service iptables stop')
+		#self.command('ufw disable') #ubuntu环境自己去加.... 主要是我没得环境测试
+		if disable:
+			self.command('systemctl disable firewalld')
+			self.command('chkconfig --del firewalld')
+		return True if self.command("systemctl status firewalld | grep '(dead)' >/dev/null 2>&1 && echo 1")[1] == '1' or self.command("service firewalld status 2>/dev/null | grep '(dead)' >/dev/null 2>&1 && echo 1")[1] == '1' else False
+
+	def close_selinux(self,disable=True)->bool:
+		"""关闭selinux"""
+		self.command('setenforce 0')
+		if disable:
+			self.command("sed -i '/^SELINUX=/cSELINUX=disabled' /etc/selinux/config")
+		return True if self.command("sestatus | grep disabled >/dev/null 2>&1 && echo 1")[1] == '1' else False
+
+	def virtual(self,)->int:
+		"""
+		0:无权限
+		1:是虚拟机
+		2:不是虚拟机
+		"""
+		data = self.command('virt-what')
+		if data[0] != 0:
+			return 0
+		elif len(data[1]) > 0:
+			return 1
+		else:
+			return 2
+
+
 class ssh(HostPortUP,_shellcmd):
 	def __init__(self,*args,**kwargs):
 		super().__init__(**kwargs) 
 		self.private_key = kwargs["private_key"] if 'private_key' in kwargs else None #rsa,dsa都可以
 		self.port = 22 if self.port is None else self.port 
 
-	def command(self,cmd)->tuple: #(exit_code,strout,stderr)
+	def command(self,cmd)->tuple: #(exit_code,stdout,stderr)
 		if not self.isconn:
 			return 'please conn() first'
 		try:
@@ -994,8 +1027,19 @@ def read_conf(filename:str)->dict:
 		data[x] = dict(_config._sections[x])
 	return data
 
+def read_conf_template(filename:str,d:dict)->dict:
+	_config = configparser.ConfigParser()
+	with open(filename,'r') as f:
+		_str = f.read()
+	_str_ = Template(_str).safe_substitute(d)
+	_config.read_string(_str_)
+	data = {}
+	for x in _config._sections:
+		data[x] = dict(_config._sections[x])
+	return data
+
 def save_conf(filename:str,config:dict)->bool:
-	"""没做异常处理"""
+	"""没做异常处理.  % 会被解析..."""
 	parser = configparser.ConfigParser()
 	parser.read_dict(config)
 	with open(filename, 'w') as configfile:
@@ -1119,6 +1163,7 @@ class localcmd(_shellcmd):
 	def __init__(self,*args,**kwargs):
 		#super().__init__(**kwargs) 
 		self.timeout = kwargs['timeout'] if 'timeout' in kwargs else 1200
+		self.isconn = True 
 
 	def command(self,cmd)->tuple: #(exit_code,strout,stderr)
 		with subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as f:
@@ -1145,6 +1190,18 @@ class mysql_ms:
 		输入n个mysql数据库信息,可以是 ddcw_tool.mysql对象, 也可以是(host,port,username,password)的元组形式
 		若只给了一个mysql从库信息, 当self.auto_conn = True(默认)的时候, 会自动获取主库信息,但获取不了其它从库信息(找不到端口)
 		只支持1主N从. 不支持多主/主主
+		应该先self.conn()取连接相关的节点
+		self.master master节点信息, tuple
+		self.slave slave节点信息, tuple
+		self._update()  跟新节点信息, 比如主从角色变更之后,可以手动更新(默认自动更新)
+		self.get_delay() 获取slave节点的延迟
+		self.get_delay_gtid() 获取slave节点与主节点的gtid差
+		self.get_status() 忘了.
+		self.get()
+		self.master_detail() 获取主库详细信息
+		self.slave_detail() 获取从库详细信息
+		self.switch() 主从切换, 默认自动选主, 也可以指定主库(tuple)
+		self.close() 不使用了,可以关闭连接.
 		"""
 		db_info = {}
 		for x in args:
@@ -1445,3 +1502,411 @@ class mysql_ms:
 				self.status = False
 				self.msg.append(e)
 		return self.status
+
+class mysql_set_ms:
+	pass
+
+class mysql_install:
+	def __init__(self,*args,**kwargs):
+		"""
+		使用例子:
+		mysql = ddcw_tool.mysql(port=8888,password='123456')
+		aa = ddcw_tool.mysql_install(mysql=mysql,cnf='mysql_template.cnf',local_pack='/root/mysql-5.7.41-linux-x86_64.tar.gz')
+		aa.init() #初始化完成之后, 可以修改mysql的参数  self.cnf['mysqld']
+		aa.auto_install() #自动安装
+
+
+		参数如下:
+		mysql(必选): ddcw_tool.mysql
+		ssh: ddcw_tool.ssh or ddcw_tool.localcmd(默认)
+		cnf(必选): 参数文件模板
+		local_pack: mysql二进制安装包路径(绝对路径)
+		remote_pack: mysql二进制包在远端的路径(绝对路径)
+		charset: utf8/utf8mb4
+		"""
+		self.mysql = kwargs['mysql']
+		self._cnf = kwargs['cnf'] #参数文件模板(使用 string.Template 替换对应的值)
+		self.ssh = kwargs['ssh'] if 'ssh' in kwargs else localcmd()
+		self.local_pack = kwargs['local_pack'] if 'local_pack' in kwargs else None #需要安装的mysql二进制包在本地的路径
+		self.remote_pack = kwargs['remote_pack'] if 'remote_pack' in kwargs else None #优先使用远程的二进制包, 没得再上传, 本地也没得的话, 就算求...
+		self.charset = kwargs['charset'] if 'charset' in kwargs else 'utf8'
+
+		#如果self.mysql.password 是空的话, 就给个默认的123456. 因为要设置root的密码
+		self.mysql.password = '123456' if self.mysql.password is None else self.mysql.password
+
+		self.status = False
+		self.msg = ''
+		self.stop_firewall = True #关闭防火墙
+		self.close_selinux = True #关闭selinux
+		self.users = [('root','%','123456'),('repl','%','123456')] #随机密码不好记...
+		self.grants = ["grant all on *.* to 'root'@'%'","grant replication client,replication slave on *.* to 'repl'@'%'"] #注: user@host 使用的是单引号. 双引号会报错.  虽然是 -e """sql"""
+		self.password_plugin = 'mysql_native_password' #设置用户密码时,会使用此密码插件
+		self.files = 123456
+		self.os_user = 'mysql'
+		self.os_group = 'mysql'
+		self.os_user_nologin = True #默认不登录mysql用户
+		self._dirobj = ['datadir','innodb_log_group_home_dir','innodb_data_home_dir','tmpdir']
+		self._fileobj = ['basedir','socket','pid_file','log_error','slow_query_log_file','general_log_file','log_bin','relay_log']
+		self.complete = 0 #当前进度. 0:未初始化,  1:初始化完成.  2:环境设置完成  3:环境检测通过(含二进制软件包)  4:mysql二进制包解压完成  5:mysql数据目录初始完成  6:root@localhost修改完成 7:新用户创建完成并授权 8:启停脚本设置完成 9:日志清理脚本设置完成  10:备份脚本设置完成
+
+	def init(self,):
+		"""
+		连接ssh, 获取mysql参数设置 self.cnf = {'mysqld':xxx, 'mysql':xxx, 'mysqld_safe':''}
+		安装之前可以修改参数, 也可以使用默认参数
+		"""
+		if not self.ssh.isconn:
+			self.status = self.ssh.conn()
+			self.msg = self.ssh.msg
+		else:
+			self.status = True
+
+		if not self.status:
+			return self.status
+
+		#获取内存信息(始终为64KB的整数), 目录信息(lsblk -d -o NAME,KNAME,SIZE,RO,ROTA,SCHED,UUID,STATE `df -hT /data | tail -n +2 | awk '{print $1}'`), 
+		MEM = int(self.ssh.mem()['MemTotal'].split()[0])*1024*0.75 #75%最大内存
+		MEM = int(MEM/(64*1024))*64*1024 #向下取64KB整数倍
+		DIR_ISSSD = True if int(self.ssh.command("""lsblk -d -o ROTA `(df -hT /data 2>/dev/null || df -hT / 2>/dev/null) | tail -n +2 | awk '{print $1}'` | tail -n +2""")[1]) == 0 else False #默认使用/data目录,没得就使用/目录作为DATADIR
+		IS_VIRTUAL = True if self.ssh.virtual() == 1 else False
+		PORT = self.mysql.port
+		HOST = self.mysql.host
+		self.cnfdir = f'/data/mysql_{PORT}/conf' #mysql参数文件存放路径
+		BASEDIR = f'/soft/mysql_{PORT}/mysqlbase/mysql'
+		DATADIR = f'/data/mysql_{PORT}/data'
+		LOGDIR = f'/data/mysql_{PORT}/log'
+		RUNDIR = f'/data/mysql_{PORT}/run'
+		IO_CAPACITY = 0
+		if DIR_ISSSD and IS_VIRTUAL:
+			IO_CAPACITY = 10000
+		elif DIR_ISSSD and not IS_VIRTUAL:
+			IO_CAPACITY = 20000
+		elif not DIR_ISSSD and IS_VIRTUAL:
+			IO_CAPACITY = 5000
+		else:
+			IO_CAPACITY = 1000
+		IO_CAPACITY_MAX = IO_CAPACITY*2
+		_tmp = {'MEM':MEM, 'PORT':PORT, 'HOST':HOST, 'BASEDIR':BASEDIR, 'DATADIR':DATADIR, 'LOGDIR':LOGDIR, 'RUNDIR':RUNDIR, 'IO_CAPACITY':IO_CAPACITY, 'IO_CAPACITY_MAX':IO_CAPACITY_MAX, 'FILES':self.files, 'USER':self.os_user, 'SERVERID':f"{random.randint(100000,400000)}{PORT}", 'CHARSET':self.charset}
+		cnf = read_conf_template(self._cnf,_tmp)
+		self.cnf = cnf
+
+		if self.local_pack is None and self.remote_pack is None:
+			self.status = False
+			self.msg = f'no pack to install'
+		else:
+			self.status = True
+		self.complete = 1
+		return self.status
+
+
+	def mysql8_set(self):
+		"""针对mysql8的部分参数修改"""
+		#expire_logs_days 修改为 binlog_expire_logs_seconds = 2592000 #默认30天
+		exired_logs_seconds = int(self.cnf['mysqld']['expire_logs_days'].split()[0])*3600*24
+		del self.cnf['mysqld']['expire_logs_days']
+		self.cnf['mysqld']['binlog_expire_logs_seconds'] = exired_logs_seconds
+
+
+	def set_basedir(self,directory):
+		"""设置Mysql软件目录"""
+		self.cnf['mysqld']['basedir'] = directory
+
+	def set_logdir(self,directory):
+		"""设置mysql日志目录 $LOG/redo  $LOG/binlog  $LOG/relaylog $LOG/dblogs/general.log $LOG/dblogs/error.log $LOG/dblogs/slow.log"""
+		self.cnf['mysqld']['log_error'] = f'{directory}/dblogs/error_{self.cnf["mysqld"]["port"]}.log'
+		self.cnf['mysqld']['slow_query_log_file'] = f'{directory}/dblogs/slow_{self.cnf["mysqld"]["port"]}.log'
+		self.cnf['mysqld']['general_log_file'] = f'{directory}/dblogs/general_{self.cnf["mysqld"]["port"]}.log'
+
+		self.cnf['mysqld']['log_bin'] = f'{directory}/binlog/m{self.cnf["mysqld"]["port"]}'
+		self.cnf['mysqld']['relay_log'] = f'{directory}/relay/relay.log'
+		self.cnf['mysqld']['innodb_log_group_home_dir'] = f'{directory}/redo'
+
+
+	def set_datadir(self,directory):
+		"""设置mysql数据目录"""
+		self.cnf['mysqld']['datadir'] = directory
+
+	def set_cnfdir(self,directory):
+		"""mysql配置文件目录"""
+		self.cnfdir = directory
+
+	def set_rundir(self,directory):
+		"""设置mysql的pid.sock的目录"""
+		self.cnf['mysqld']['socket'] = f'{directory}/mysql.sock'
+		self.cnf['mysqld']['pid_file'] = f'{directory}/mysql.pid'
+
+	def _printinfo(self,msg):
+		print(f"[{self.complete/10:.2%}]",msg)
+
+	def auto_install(self,):
+		"""自动安装"""
+		self._printinfo('开始自动安装. 进度:')
+		self.init()
+		self._printinfo('初始化完成, 开始设置环境')
+		self.env_set() #含上传my.cnf
+
+		self._printinfo('环境设置完成, 开始检测软件包')
+		#检测remote_pack是否存在, 不存在就上传local_pack. 没得就return False
+		if self.remote_pack is not None:
+			if self.ssh.command(f'[ -f {self.remote_pack} ] && echo 1 || echo 0') == '0':
+				if self.local_pack is not None:
+					self.remote_pack = f"/tmp/{file_name(self.local_pack)}"
+					self.transfile([(self.local_pack,self.remote_pack)])
+				else:
+					self.status = False
+					self.msg = 'self.local_pack is None. no pack to install'
+		elif self.local_pack is None:
+			self.status = False
+			self.msg = 'self.local_pack and self.remote_pack is None. no pack to install'
+		else:
+			self.remote_pack = f"/tmp/{file_name(self.local_pack)}"
+			self.transfile([(self.local_pack,self.remote_pack)])
+			
+
+		self._printinfo('软件包检测完成, 开始检测环境')
+		if not self.env_check():
+			self.status = False
+			self.msg += '  env check faild'
+			return self.status
+		
+
+		self._printinfo(f'环境检测完成, 开始解压{self.remote_pack}')
+		installbase_result = self.install_base()
+		if installbase_result[0]:
+			mysql_cmd = installbase_result[1][0]
+			mysql_version = installbase_result[1][1]
+			mysqld_cmd = installbase_result[2][0]
+			mysqld_version = installbase_result[2][1]
+
+		self._printinfo(f'软件解压完成(mysqld:{mysqld_version}), 开始初始化数据库')
+		rootpassword = self.install_init(mysqld_cmd,mysqld_version)
+		if not self.status:
+			print(rootpassword,self.msg,self.cnf["mysqld"]["log_error"])
+			return False
+
+		self.post_start(mysqld_cmd) #初始化完成, 要启动mysql
+		#等mysqld启动完成, 等10秒差不多了. 
+		_sleep_time = 10
+		while _sleep_time > 0:
+			if self.ssh.command(f'[ -f {self.cnf["mysqld"]["socket"]} ]')[0] == 0:
+				break
+			_sleep_time -= 0.5
+			time.sleep(0.5)
+
+		if _sleep_time <0:
+			self.status = False
+			self.msg = 'server start faild.'
+			return self.status
+
+		self._printinfo('数据库初始化完成, 开始设置root@localhost密码 self.mysql.password')
+		self.post_user(mysql_cmd,rootpassword)
+		if not self.status:
+			print('root@localhost password modified faild.',self.msg)
+
+		self._printinfo(f'root@localhost账号设置完成, 开始创建初始用户(self.users) {[ x[0] for x in self.users ]}')
+		self.post_create_user(mysql_cmd)
+		self.post_grant_user(mysql_cmd)
+
+		self._printinfo('初始账号创建完成(授权完成), 开始设置启停脚本')
+		self.post_start_stop_script()
+
+		self._printinfo('启停脚本设置完成, 开始设置备份脚本(不含备份计划)')
+		self.post_backup_script()
+
+		self.complete = 10
+		self._printinfo('不设置开机自启, 需要的话, 自己执行 self.post_start_on_boot()')
+
+
+	def env_check(self,)->bool:
+		"""检查空间大小, 目录是否存在之类的"""
+		self.msg = ''
+
+		#检测端口是否被占用
+		if len(scanport(self.mysql.host,self.mysql.port)) > 0:
+			self.status = False
+			self.msg += f'{self.mysql.port} 端口已存在'
+
+		#检测cnf文件是否存在
+		if self.ssh.command(f'[ -f {self.cnfdir}/mysql_{self.cnf["mysqld"]["port"]}.cnf ] && echo 1 || echo 0')[1] != '1':
+			self.status = False
+			self.msg += f'cnf({self.cnfdir}/mysql_{self.cnf["mysqld"]["port"]}.cnf) file not exist.'
+
+		#检测data目录是否存在(存在则False)
+		if int(self.ssh.command(f'du -s {self.cnf["mysqld"]["datadir"]}')[1].split()[0]) > 10*1024*1024:
+			self.status = False
+			self.msg += f'datadir:{self.cnf["mysqld"]["datadir"]} is not null.'
+
+		#检查用户是否存在
+		if self.ssh.command(f'id {self.os_user} >/dev/null 2>&1 && echo 1 || echo 0')[1] != '1':
+			self.msg += f'no user {self.os_user}'
+			self.status = False
+
+		#检查目录是否存在, 空间是否大于2GB
+		for x in self._dirobj:
+			dirname = file_dir(self.cnf['mysqld'][x].split()[0])
+			if self.ssh.command(f'[ -d {dirname} ] && echo 1 || echo 0')[1] != '1':
+				self.msg += f'no directory {dirname} for {self.cnf["mysqld"][x]}'
+				self.status = False
+			if int(self.ssh.command(f"""df -PT {dirname} | tail -n +2 | awk '"""+"""{print $(NF-2)}'""")[1]) < 2*1024*1024:
+				self.msg += f'directory({dirname}) ava size less than 2GB'
+		if int(self.ssh.command(f"""df -PT /tmp | tail -n +2 | awk '"""+"""{print $(NF-2)}'""")[1]) < 2*1024*1024:
+			self.msg += f'/tmp less than 2GB'
+			self.status = False
+
+		#检测二进制包是否存在
+		self.complete = 3
+		return self.status
+	
+
+	def env_set(self,):
+		"""创建目录,用户,修改权限,open-files-limit  关闭防火墙和selinux"""
+
+		#创建用户
+		useradd_cmd = f'useradd {self.os_user}'
+		if self.os_user_nologin:
+			useradd_cmd += " -s /usr/sbin/nologin"
+		self.ssh.command(useradd_cmd)
+		self.ssh.command(f'groupadd {self.os_group}')
+		self.ssh.command(f'usermod -g {self.os_group} {self.os_user}')
+
+		#安装依赖
+		self.ssh.command('ldconfig -p | grep libssl.so || yum install openssl-libs -y || apt install libssl1.0.0 -y')
+		self.ssh.command('ldconfig -p | grep libaio.so.1 || yum install libaio -y || apt install libaio1/ -y')
+		self.ssh.command('yum install -y compat-openssl10')
+
+		#创建目录和修改权限
+		for x in self._dirobj:
+			#dirname = file_dir(self.cnf['mysqld'][x])
+			dirname = self.cnf['mysqld'][x].split()[0]
+			if x != '':
+				self.ssh.command(f'mkdir -p {dirname}')
+				self.ssh.command(f'chown {self.os_user}:{self.os_group} {dirname}')
+		for x in self._fileobj:
+			dirname = file_dir(self.cnf['mysqld'][x].split()[0])
+			if x != '':
+				self.ssh.command(f'mkdir -p {dirname}')
+				self.ssh.command(f'chown {self.os_user}:{self.os_group} {dirname}')
+
+
+		#创建配置文件存放路径
+		_dirname = self.cnfdir
+		self.ssh.command(f'mkdir -p {_dirname}')
+		self.ssh.command(f'chown {self.os_user}:{self.os_group} {_dirname}')
+
+		#关闭防火墙和selinux
+		if self.stop_firewall:
+			self.ssh.stop_firewall()
+		if self.close_selinux:
+			self.ssh.close_selinux()
+
+		#设置用户limit限制.
+
+		#上传cnf配置文件
+		_tmp_filename = f'/tmp/.mysql_{self.mysql.port}_{random.randint(1,10000)}.cnf'
+		#print(_tmp_filename)
+		if save_conf(_tmp_filename,self.cnf):
+			self.transfile([(_tmp_filename,f'{self.cnfdir}/mysql_{self.cnf["mysqld"]["port"]}.cnf')])
+			self.complete = 2
+			return True
+		else:
+			return False
+
+
+	def transfile(self,files):
+		"""[(localfile,remotefile),(localfile,remotefile)] """
+		if hasattr(self.ssh,'host'):
+			_sftp = sftp(host=self.ssh.host, port=self.ssh.port, user=self.ssh.user, password=self.ssh.password,private_key=self.ssh.private_key)
+			_sftp.conn()
+			for x in files:
+				_sftp.put(x[0],x[1])
+			_sftp.close()
+		else:
+			for x in files:
+				self.ssh.command(f'cp -ra {x[0]} {x[1]}')
+
+		return True
+
+	def install_base(self):
+		"""解压目录, 并返回 mysqld/mysqld-debug,mysql 的绝对路径,版本(mysqld --verbose --version), 是否可用 信息"""
+		data = self.ssh.command(f'tar -xvf {self.remote_pack} -C /tmp')
+		if data[0] != 0:
+			return False,data
+		mysqltarname = data[1].split()[0].split('/')[0]
+		self.ssh.command(f'mv /tmp/{mysqltarname} {self.cnf["mysqld"]["basedir"]}')
+		self.ssh.command(f'[ -f {self.cnf["mysqld"]["basedir"]}/bin/mysqld ] || mv {self.cnf["mysqld"]["basedir"]}/bin/mysqld-debug {self.cnf["mysqld"]["basedir"]}/bin/mysqld') #没得mysqld, 就把mysqld-debug移动过去. 兼容了编译的时候包含的--debug选项
+		mysql_cmd = self.ssh.command(f'{self.cnf["mysqld"]["basedir"]}/bin/mysql --verbose --version')
+		mysqld_cmd = self.ssh.command(f'{self.cnf["mysqld"]["basedir"]}/bin/mysqld --verbose --version')
+		if mysql_cmd[0] == 0 and mysqld_cmd[0] == 0:
+			self.complete = 4
+			return True,(f'{self.cnf["mysqld"]["basedir"]}/bin/mysql',mysql_cmd[1].split()[2]), ((f'{self.cnf["mysqld"]["basedir"]}/bin/mysqld',mysqld_cmd[1].split()[2]))
+		else:
+			return False,mysql_cmd,mysqld_cmd
+
+
+	def install_init(self,mysqld,mysqld_version):
+		"""初始化数据库, 返回数据库root密码"""
+		v1,v2,v3 = [ int(x) for x in mysqld_version.split('.') ]
+		if v1 == 8 or (v1==5 and v2==7 and v3>=6):
+			data = self.ssh.command(f'{mysqld} --defaults-file={self.cnfdir}/mysql_{self.cnf["mysqld"]["port"]}.cnf --initialize --user={self.os_user}')
+		else:
+			data = self.ssh.command(f'{file_dir(mysqld)}/mysql_install_db --defaults-file={self.cnfdir}/mysql_{self.cnf["mysqld"]["port"]}.cnf --user={self.os_user}')
+		if data[0] == 0:
+			rootpassword = self.ssh.command(f'grep "A temporary password is generated" {self.cnf["mysqld"]["log_error"]}'+" | awk '{print $NF}'")[1]
+			self.complete = 5
+			self.status = True
+			return rootpassword
+		else:
+			self.status = False
+			self.msg = data[2]
+			return data[1]
+
+	def post_user(self,mysqlcmd,rootpassword):
+		"""设置root@localhost密码"""
+		sql = f"""ALTER USER 'root'@'localhost' IDENTIFIED BY '{self.mysql.password}';"""
+		#print(sql)
+		data = self.ssh.command(f'{mysqlcmd} --connect-expired-password -S {self.cnf["mysqld"]["socket"]} -uroot --password="{rootpassword}" -e "{sql}"')
+		self.ssh.command('flush privileges;')
+		self.status = True if len(data[1]) == 0 else False
+		self.msg = data[2]
+		self.complete = 6
+		return self.status
+
+	def post_create_user(self,mysqlcmd):
+		"""创建账号"""
+		for x in self.users:
+			sql = f"create user '{x[0]}'@'{x[1]}' identified WITH '{self.password_plugin}' by '{x[2]}';"
+			data = self.ssh.command(f'{mysqlcmd} -S {self.cnf["mysqld"]["socket"]} --password="{self.mysql.password}" -e "{sql}"')
+			#print(sql,data)
+		self.complete = 7
+
+	def post_grant_user(self,mysqlcmd):
+		"""授权"""
+		for x in self.grants:
+			data = self.ssh.command(f'{mysqlcmd} -S {self.cnf["mysqld"]["socket"]} --password="{self.mysql.password}" -e """{x}"""')
+			#print(x,data)
+		self.ssh.command('flush privileges;')
+		self.complete = 7
+	
+	def post_start_stop_script(self):
+		"""启停脚本设置"""
+		self.ssh.command(f'cp -ra {self.cnf["mysqld"]["basedir"]}/support-files/mysql.server /etc/init.d/mysqld_{self.mysql.port} ')
+		self.ssh.command(f'chmod +x /etc/init.d/mysqld_{self.mysql.port}')
+		self.ssh.command(f'sed -i "/^basedir=/cbasedir={self.cnf["mysqld"]["basedir"]}" /etc/init.d/mysqld_{self.mysql.port}')
+		self.ssh.command(f'sed -i "/^datadir=/cdatadir={self.cnf["mysqld"]["datadir"]}" /etc/init.d/mysqld_{self.mysql.port}')
+		self.ssh.command(f'sed -i "/^mysqld_pid_file_path=/cmysqld_pid_file_path={self.cnf["mysqld"]["pid_file"]}" /etc/init.d/mysqld_{self.mysql.port}')
+		self.ssh.command(f'sed -i "/mysqld_safe --datadir=/cnohup {self.cnf["mysqld"]["basedir"]}/bin/mysqld_safe --defaults-file={self.cnfdir}/mysql_{self.cnf["mysqld"]["port"]}.cnf --user={self.os_user} >> {file_dir(self.cnf["mysqld"]["log_error"])}/nohup.out &" /etc/init.d/mysqld_{self.mysql.port}')
+		self.ssh.command('systemctl daemon-reload')
+		self.complete = 8
+
+	def post_backup_script(self):
+		"""备份脚本设置, 不含备份策略"""
+		pass
+
+	def post_start_on_boot(self):
+		"""设置开机自启"""
+		pass
+
+	def post_start(self,mysqld):
+		self.ssh.command(f'nohup {mysqld} --defaults-file={self.cnfdir}/mysql_{self.cnf["mysqld"]["port"]}.cnf &')
+
+	def post_stop(self):
+		self.ssh.command(f'[ -f {self.cnf["mysqld"]["pid_file"]} ] && kill `cat {self.cnf["mysqld"]["pid_file"]}`')

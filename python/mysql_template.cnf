@@ -1,0 +1,156 @@
+#mysql template config file. create by ddcw 
+#使用的configparser解析, 不能有百分号(%)
+[mysql]
+prompt="(\\u@\\h) [\\d][\\r:\\m:\\s]> "
+
+[mysqld_safe]
+user=${USER}
+core-file-size=unlimited
+open-files-limit=${FILES}
+
+
+[mysqld]
+user=${USER}
+bind_address=${HOST}
+port=${PORT}
+
+basedir=${BASEDIR}
+datadir=${DATADIR}
+socket=${RUNDIR}/mysql.sock
+pid_file=${RUNDIR}/mysql.pid
+
+character-set-server=${CHARSET}
+collation-server=${CHARSET}_general_ci
+
+server_id=${SERVERID}
+
+default_storage_engine=INNODB
+disabled_storage_engines="FEDERATED"
+
+max_allowed_packet=1073741824
+max_connections=10240
+max_user_connections=0
+max_connect_errors=2000
+table_open_cache=10240
+open_files_limit=${FILES}
+
+join_buffer_size=2097152
+sort_buffer_size=2097152
+skip_name_resolve=OFF
+
+
+tmpdir=${LOGDIR}/tmp
+log_error=${LOGDIR}/dblogs/error_${PORT}.log
+slow_query_log=ON
+slow_query_log_file=${LOGDIR}/dblogs/slow_${PORT}.log
+long_query_time=1
+
+general_log=OFF
+general_log_file=${LOGDIR}/dblogs/general_${PORT}.log
+
+expire_logs_days=15
+
+
+
+#===============binlog设置===============#
+binlog_format=ROW
+log_bin=${LOGDIR}/binlog/m${PORT}
+sync_binlog=1
+max_binlog_size=1073741824
+
+#=============innodb===================#
+innodb_log_group_home_dir=${LOGDIR}/redo
+innodb_log_files_in_group=4
+innodb_log_file_size=1073741824
+innodb_log_buffer_size=67108864
+innodb_log_write_ahead_size=8192
+innodb_data_home_dir=${DATADIR}  #innodb系统表空间文件目录
+innodb_temp_data_file_path="ibtmp1:50M:autoextend:max:30G"
+innodb_open_files=${FILES}
+innodb_page_size=16384
+innodb_default_row_format=DYNAMIC
+innodb_file_per_table=ON
+
+#innodb_buffer_pool_size=134217728
+innodb_buffer_pool_size=${MEM}
+innodb_buffer_pool_instances=1 #每个instances内存不能小于128M 134217728  当${MEM} >= 64GB的时候, 设置为8
+
+innodb_doublewrite=ON
+innodb_fill_factor=80 #若经常修改数据,则可以降低此值
+
+#SSD盘建议0   HDD建议1    8.0默认0   5.7默认1   
+innodb_flush_neighbors=0  #0刷新的时候不刷邻居  1(默认): 刷新相同范围内的连续脏页 2:范围比1广
+innodb_io_capacity=${IO_CAPACITY}  #虚拟机机械: 5000  虚拟机固态10000  物理机固态20000  物理机机械1000
+innodb_io_capacity_max=${IO_CAPACITY_MAX}  #2倍innodb_io_capacity
+
+innodb_lock_wait_timeout=50 #单位秒
+innodb_lru_scan_depth=1024
+
+innodb_read_only=off
+
+#当变化的页数量达到20页时, 收集统计信息 默认20 建议20 若表数据量非常大, 可以增加这个值
+innodb_stats_persistent_sample_pages=20
+#指定InnoDB索引统计信息是否持久保存到磁盘 默认ON
+innodb_stats_persistent=ON
+
+innodb_thread_concurrency=0 #限制innodb线程.   若宿主机有多个mysql实例,或者繁忙, 则可以设置为64
+
+
+#===============事务================#
+transaction_isolation=READ-COMMITTED #默认RR.  READ-UNCOMMITTED,READ-COMMITTED,REPEATABLE-READ,SERIALIZABLE
+#tx_read_only=OFF
+
+innodb_flush_log_at_trx_commit=1
+innodb_flush_log_at_timeout=1
+
+#binlog_gtid_simple_recovery=on #>5.7.8都可以设置为ON
+
+
+#=======================主从====================#
+#relay_log_info_file="relay-log.info"
+relay_log="${LOGDIR}/relay/relay.log"
+max_relay_log_size=104857600  #100M  默认0无限制
+relay_log_info_repository=table
+master_info_repository="TABLE"
+relay_log_purge=on
+
+#slave_parallel_workers=64
+
+#组提交
+#binlog_group_commit_sync_delay=0 #binlog组提交延迟(微秒, 1,000,000)
+#slave_parallel_type=DATABASE #当slave_parallel_workers>0才有效. 可选:DATABASE,LOGICAL_CLOCK
+#binlog_transaction_dependency_tracking=COMMIT_ORDER #COMMIT_ORDER,WRITESET,WRITESET_SESSION
+
+
+#=============gtid=================#
+gtid_mode=ON
+enforce_gtid_consistency=on
+#gtid_next=AUTOMATIC
+
+#==========performance_schema=====#
+performance_schema=ON
+
+#secure_file_priv=''
+
+#binlog_checksum=NONE
+log_slave_updates=ON  #sql执行relay的时候, 要不要写binlog,  级联或者主从切换需要. 但是只是用来测试的从库可以不启用
+
+
+#group_replication
+#plugin_load_add='group_replication.so'  #也可以手动INSTALL PLUGIN group_replication SONAME 'group_replication.so';
+#transaction_write_set_extraction=XXHASH64
+#group_replication_group_name="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+#group_replication_start_on_boot=off  #是否自动启动mgr
+#group_replication_local_address= "192.168.101.21:33081"  #只有这个地方不一样
+#group_replication_group_seeds= "192.168.101.21:33081,192.168.101.21:33101,192.168.101.21:33121"
+#group_replication_bootstrap_group=off  #引导组
+#group_replication_single_primary_mode=on  #默认为单主
+#slave_preserve_commit_order=1  #因为本环境slave_parallel_workers=64
+#audit_uninstall_plugin=1
+#plugin-load=AUDIT=libaudit_plugin.so 
+#audit_offsets=7832, 7880, 3640, 4800, 456, 360, 0, 32, 64, 160, 544, 7996, 4368, 3648, 3656, 3660, 6080, 2072, 8, 7064, 7104, 7088, 13480, 148, 672, 0
+#audit_json_file=ON
+
+
+#performance-schema-instrument="memory/%=COUNTED" #监控数据库内存
+#completion_type = 0 #0:无影响  1:事务提交/回滚后,立即开始新事务(trans_reset_one_shot_chistics(thd))  2:事务提交/回滚后断开连接(THD::KILL_CONNECTION)....
