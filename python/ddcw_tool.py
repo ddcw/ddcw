@@ -1676,6 +1676,11 @@ class mysql_install:
 			mysql_version = installbase_result[1][1]
 			mysqld_cmd = installbase_result[2][0]
 			mysqld_version = installbase_result[2][1]
+		else:
+			print('mysql/mysqld cant execute.')
+			self.status = False
+			print(installbase_result)
+			return self.status
 
 		self._printinfo(f'软件解压完成(mysqld:{mysqld_version}), 开始初始化数据库')
 		rootpassword = self.install_init(mysqld_cmd,mysqld_version)
@@ -1706,7 +1711,7 @@ class mysql_install:
 		self.post_create_user(mysql_cmd)
 		self.post_grant_user(mysql_cmd)
 
-		self._printinfo('初始账号创建完成(授权完成), 开始设置启停脚本')
+		self._printinfo(f'初始账号创建完成(授权完成), 开始设置启停脚本(/etc/init.d/mysqld_{self.mysql.port} start/stop/status)')
 		self.post_start_stop_script()
 
 		self._printinfo('启停脚本设置完成, 开始设置备份脚本(不含备份计划)')
@@ -1751,6 +1756,15 @@ class mysql_install:
 		if int(self.ssh.command(f"""df -PT /tmp | tail -n +2 | awk '"""+"""{print $(NF-2)}'""")[1]) < 2*1024*1024:
 			self.msg += f'/tmp less than 2GB'
 			self.status = False
+
+		#检测依赖libssl libaio
+		if self.ssh.command('ldconfig -p | grep libssl.so >/dev/null 2>&1 && echo 1 || echo 0')[1] != '1':
+			self.status = False
+			self.msg += f'no libssl.so'
+		if self.ssh.command('ldconfig -p | grep libaio.so >/dev/null 2>&1 && echo 1 || echo 0')[1] != '1':
+			self.status = False
+			self.msg += f'no libaio.so'
+
 
 		#检测二进制包是否存在
 		self.complete = 3
