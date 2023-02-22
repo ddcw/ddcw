@@ -4,7 +4,7 @@ import pymysql
 import psycopg2 #pip install psycopg2-binary
 import cx_Oracle
 import base64
-from multiprocessing import Process
+from multiprocessing import Process,Array
 from threading import Thread
 from faker import Faker
 import datetime,time
@@ -16,6 +16,7 @@ import logging
 import os
 import configparser
 from string import Template
+
 
 class HostPortUP(object):
 	def __init__(self,*args,**kwargs):
@@ -463,6 +464,16 @@ class mysql(_dbclass):
 		sql = f"""select * from (select TABLE_SCHEMA,TABLE_NAME,DATA_LENGTH,DATA_FREE,round(DATA_FREE/(DATA_LENGTH+DATA_FREE)*100,2) as fragment_rate from information_schema.tables where DATA_LENGTH>0 and TABLE_SCHEMA not in ('sys','information_schema','mysql','performance_schema')) as aa where aa.fragment_rate > {rate}; """
 		return self.sql(sql)
 
+	def get_variables(self)->dict:
+		if not self.isconn:
+			self.conn()
+		return dict(self.sql('show global variables'))
+
+	def get_status(self)->dict:
+		if not self.isconn:
+			self.conn()
+		return dict(self.sql('show global status'))
+
 class oracle(_dbclass):
 	def __init__(self,*args,**kwargs):
 		super().__init__(**kwargs)
@@ -686,20 +697,26 @@ primary key(id)
 
 
 
-	def _monitor(self,):
+	def _monitor(self,_trx,_query,_err,parallel):
 		conn = self.get_conn()
 		runtime = 0
 		querys,commit_rollback = self._get_tps_qps_aux(conn)
+		trx,qry,err = sum([ x for x in _trx ]),sum([ x for x in _query ]),sum([ x for x in _err ])
 		while runtime < self.time:
 			time.sleep(self.report_interval)
 			runtime += self.report_interval
 			current_q,current_cr = self._get_tps_qps_aux(conn)
+			current_trx,current_qry,current_err = sum([ x for x in _trx ]),sum([ x for x in _query ]),sum([ x for x in _err ])
 			qps = round((current_q-querys)/self.report_interval,2)
+			qps2 = round((current_qry-qry)/self.report_interval,2)
 			tps = round((current_cr-commit_rollback)/self.report_interval,2)
+			tps2 = round((current_trx-trx)/self.report_interval,2)
+			errs = round((current_err-err)/self.report_interval,2)
 			querys,commit_rollback = current_q,current_cr
-			self.printinfo(f'{runtime}: qps:{qps} tps:{tps}')
+			trx,qry,err = current_trx,current_qry,current_err
+			self.printinfo(f'{runtime}: qps:{qps} tps:{tps}  INTERNAL: qps:{qps2} tps:{tps2} errors:{errs}')
 
-	def benchmark(self):
+	def benchmark(self,_trx,_query,_err,x):
 		fake = Faker(locale='zh_CN')
 		if self.trx_type == 1: #混合读写 10主键读, 4范围读, 2:update 1:delete 1:insert
 			self.printinfo('start read and write.')
@@ -713,11 +730,13 @@ primary key(id)
 						id_sql = f'select * from {tablename} where id=%s'
 						cursor.execute(id_sql,(random.randint(1,self.rows),))
 						#_data = cursor.fetchall()
+					_query[x] += 10
 					for j in range(4):
 						range_sql = f'select * from {tablename} where id>=%s and id < %s'
 						_id = random.randint(1,self.rows)
 						cursor.execute(range_sql,(_id,_id+10))
 						#_data = cursor.fetchall()
+					_query[x] += 4
 					update_sql1 = f'update {tablename} set email=%s where id=%s'
 					cursor.execute(update_sql1,(fake.email(),random.randint(1,self.rows)))
 					#_data = cursor.fetchall()
@@ -730,10 +749,13 @@ primary key(id)
 					insert_sql = f'insert into {tablename} values(%s,%s,%s,%s,%s)'
 					values = (delete_id, fake.name(), fake.date_of_birth(minimum_age=18, maximum_age=65), fake.address(), fake.email(), )
 					cursor.execute(insert_sql,values)
+					_query[x] += 4
 					#_data = cursor.fetchall()
 					conn.commit()
+					_trx[x] += 1
 					cursor.close()
 				except Exception as e:
+					_err[x] += 1
 					self.printinfo(e)
 					#time.sleep(1)
 					pass #error+1 TODO
@@ -749,15 +771,18 @@ primary key(id)
 						id_sql = f'select * from {tablename} where id=%s'
 						cursor.execute(id_sql,(random.randint(1,self.rows),))
 						#_data = cursor.fetchall()
+					_query[x] += 10
 					for j in range(4):
 						range_sql = f'select * from {tablename} where id>=%s and id < %s'
 						_id = random.randint(1,self.rows)
 						cursor.execute(range_sql,(_id,_id+10))
 						#_data = cursor.fetchall()
+					_query[x] += 4
 					cursor.close()
 					conn.commit()
+					_trx[x] += 1
 				except Exception as e:
-					pass #error+1 TODO
+					_err[x] += 1
 			conn.close()
 		elif self.trx_type == 3:
 			conn = self.get_conn()
@@ -778,12 +803,14 @@ primary key(id)
 					insert_sql = f'insert into {tablename} values(%s,%s,%s,%s,%s)'
 					values = (delete_id, fake.name(), fake.date_of_birth(minimum_age=18, maximum_age=65), fake.address(), fake.email(), )
 					cursor.execute(insert_sql,values)
+					_query[x] += 4
 					_data = cursor.fetchall()
 					conn.commit()
+					_trx[x] += 1
 					cursor.close()
 				except Exception as e:
+					_err[x] += 1
 					self.printinfo(e)
-					pass #error+1 TODO
 			conn.close()
 				
 		else:
@@ -794,13 +821,19 @@ primary key(id)
 		if not hasattr(self,'servicename') and self.database is None :
 			return 'database is None'
 		self.msg = [] #清空
+
+		#内部计数
+		_trx = Array('L',[ 0 for x in range(self.parallel) ] ) 
+		_query = Array('L',[ 0 for x in range(self.parallel) ] )
+		_err = Array('L',[ 0 for x in range(self.parallel) ] )
+
 		#parallel:压测  还有个进程负责监控
-		P_monitor = Process(target=self._monitor,)
+		P_monitor = Process(target=self._monitor,args=(_trx,_query,_err,self.parallel))
 		P_monitor.start()
 		#获取多个连接
 		P_work = {}
 		for x in range(self.parallel):
-			P_work[x] = Process(target=self.benchmark,)
+			P_work[x] = Process(target=self.benchmark, args=(_trx,_query,_err,x))
 		for x in range(self.parallel):
 			P_work[x].start()
 		P_monitor.join()
@@ -892,7 +925,7 @@ primary key(id)
 		for x in range(1,self.tables+1):
 			insert_work[x].join()
 
-	def benchmark(self):
+	def benchmark(self,_trx,_query,_err,x):
 		fake = Faker(locale='zh_CN')
 		if self.trx_type == 1: #混合读写 10主键读, 4范围读, 2:update 1:delete 1:insert
 			self.printinfo('start read and write.')
@@ -906,11 +939,13 @@ primary key(id)
 						id_sql = f'select * from {tablename} where id=:1'
 						cursor.execute(id_sql,(random.randint(1,self.rows),))
 						#_data = cursor.fetchall()
+					_query[x] += 10
 					for j in range(4):
 						range_sql = f'select * from {tablename} where id>=:1 and id < :2'
 						_id = random.randint(1,self.rows)
 						cursor.execute(range_sql,(_id,_id+10))
 						#_data = cursor.fetchall()
+					_query[x] += 4
 					update_sql1 = f'update {tablename} set email=:1 where id=:2'
 					cursor.execute(update_sql1,(fake.email(),random.randint(1,self.rows)))
 					#_data = cursor.fetchall()
@@ -923,13 +958,14 @@ primary key(id)
 					insert_sql = f'insert into {tablename} values(:1,:2,:3,:4,:5)'
 					values = (delete_id, fake.name(), fake.date_of_birth(minimum_age=18, maximum_age=65), fake.address(), fake.email(), )
 					cursor.execute(insert_sql,values)
+					_query[x] += 4
 					#_data = cursor.fetchall()
 					conn.commit()
+					_trx[x] += 1
 					cursor.close()
 				except Exception as e:
+					_err[x] += 1
 					self.printinfo(e)
-					#time.sleep(1)
-					pass #error+1 TODO
 			conn.close()
 		elif self.trx_type == 2:
 			conn = self.get_conn()
@@ -942,15 +978,18 @@ primary key(id)
 						id_sql = f'select * from {tablename} where id=:1'
 						cursor.execute(id_sql,(random.randint(1,self.rows),))
 						#_data = cursor.fetchall()
+					_query[x] += 10
 					for j in range(4):
 						range_sql = f'select * from {tablename} where id>=:1 and id < :2'
 						_id = random.randint(1,self.rows)
 						cursor.execute(range_sql,(_id,_id+10))
 						#_data = cursor.fetchall()
+					_query[x] += 4
 					cursor.close()
 					conn.commit()
+					_trx[x] += 1
 				except Exception as e:
-					pass #error+1 TODO
+					_err[x] += 1
 			conn.close()
 		elif self.trx_type == 3:
 			conn = self.get_conn()
@@ -972,11 +1011,13 @@ primary key(id)
 					values = (delete_id, fake.name(), fake.date_of_birth(minimum_age=18, maximum_age=65), fake.address(), fake.email(), )
 					cursor.execute(insert_sql,values)
 					_data = cursor.fetchall()
+					_query[x] += 4
 					conn.commit()
+					_trx[x] += 1
 					cursor.close()
 				except Exception as e:
 					self.printinfo(e)
-					pass #error+1 TODO
+					_err[x] += 1
 			conn.close()
 				
 		else:
@@ -1924,3 +1965,5 @@ class mysql_install:
 
 	def post_stop(self):
 		self.ssh.command(f'[ -f {self.cnf["mysqld"]["pid_file"]} ] && kill `cat {self.cnf["mysqld"]["pid_file"]}`')
+
+

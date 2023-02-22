@@ -166,17 +166,127 @@ test.run() #开始压测
 test.cleanup() #清理数据(可选)
 ```
 
+属性:
+
+parallel 并发,默认4
+
+tables 表数量 默认12
+
+rows 每张表行数 默认100,000 
+
+trx_type 事务类型, 1:读写混合(默认), 2:只读  3:只写
+
+table_basename 表的名字
+
+report_interval  反馈间隔, 默认10秒
+
+max_commit  初始表数据时,每n条数据提交一次.默认10,000
+
 
 
 ## benchmark_oracle
 
 同benchmark_mysql
 
+```python
+import ddcw_tool
+aa = ddcw_tool.benchmark_oracle(host='192.168.101.19',port=1521,user='u1',password='123456',servicename='ddcw19pdb')
+aa.prepare()
+aa.run()
+aa.cleanup()
+```
+
+效果:
+
+```
+>>> import ddcw_tool
+>>> aa = ddcw_tool.benchmark_oracle(host='192.168.101.19',port=1521,user='u1',password='123456',servicename='ddcw19pdb')
+>>> aa.run()
+start read and write.
+start read and write.
+start read and write.
+start read and write.
+10: qps:5412.1 tps:299.2  INTERNAL: qps:5402.0 tps:300.1 errors:0.0
+20: qps:5783.0 tps:321.2  INTERNAL: qps:5804.6 tps:322.5 errors:0.0
+30: qps:6123.4 tps:340.2  INTERNAL: qps:6121.4 tps:340.0 errors:0.0
+40: qps:5992.0 tps:332.9  INTERNAL: qps:5991.2 tps:332.9 errors:0.0
+50: qps:6246.5 tps:347.0  INTERNAL: qps:6247.4 tps:347.1 errors:0.0
+60: qps:6221.7 tps:345.5  INTERNAL: qps:6217.2 tps:345.4 errors:0.0
+70: qps:6448.4 tps:358.4  INTERNAL: qps:6453.8 tps:358.7 errors:0.0
+80: qps:6331.4 tps:351.6  INTERNAL: qps:6327.0 tps:351.5 errors:0.0
+90: qps:6453.8 tps:358.5  INTERNAL: qps:6459.0 tps:358.6 errors:0.0
+100: qps:6193.2 tps:344.1  INTERNAL: qps:6187.0 tps:343.8 errors:0.0
+110: qps:6097.2 tps:338.8  INTERNAL: qps:6081.4 tps:337.8 errors:0.0
+120: qps:5621.5 tps:312.1  INTERNAL: qps:5619.4 tps:312.4 errors:0.0
+>>> 
+```
+
+
+
 
 
 ## benchmark_postgres
 
-同benchmark_mysql (不显示tps,qps)
+同benchmark_mysql (不显示数据库的tps,qps, 只显示内部的tps,qps,errors)
+
+```python
+import ddcw_tool
+aa = ddcw_tool.benchmark_postgres(port=5432,user='u1',password='123456',database='db1')
+aa.prepare()
+aa.run()
+aa.cleanup()
+```
+
+例子:
+
+```
+import ddcw_tool
+aa = ddcw_tool.benchmark_postgres(port=5432,user='u1',password='123456',database='db1')
+>>> aa.prepare()
+ddcw_benchmark__1 create success.
+ddcw_benchmark__2 create success.
+ddcw_benchmark__3 create success.
+ddcw_benchmark__4 create success.
+ddcw_benchmark__5 create success.
+ddcw_benchmark__6 create success.
+ddcw_benchmark__7 create success.
+ddcw_benchmark__8 create success.
+ddcw_benchmark__9 create success.
+ddcw_benchmark__10 create success.
+ddcw_benchmark__11 create success.
+ddcw_benchmark__12 create success.
+ddcw_benchmark__7 table data insert completed.
+ddcw_benchmark__10 table data insert completed.
+ddcw_benchmark__11 table data insert completed.
+ddcw_benchmark__9 table data insert completed.
+ddcw_benchmark__1 table data insert completed.
+ddcw_benchmark__8 table data insert completed.
+ddcw_benchmark__5 table data insert completed.
+ddcw_benchmark__4 table data insert completed.
+ddcw_benchmark__2 table data insert completed.
+ddcw_benchmark__3 table data insert completed.
+ddcw_benchmark__6 table data insert completed.
+ddcw_benchmark__12 table data insert completed.
+>>> aa.run()
+start read and write.
+start read and write.
+start read and write.
+start read and write.
+10: qps:0.0 tps:0.0  INTERNAL: qps:26388.6 tps:1465.7 errors:0.0
+20: qps:0.0 tps:0.0  INTERNAL: qps:27849.2 tps:1547.3 errors:0.0
+30: qps:0.0 tps:0.0  INTERNAL: qps:28758.0 tps:1597.7 errors:0.0
+40: qps:0.0 tps:0.0  INTERNAL: qps:23470.2 tps:1304.0 errors:0.0
+50: qps:0.0 tps:0.0  INTERNAL: qps:31316.2 tps:1739.6 errors:0.0
+60: qps:0.0 tps:0.0  INTERNAL: qps:26973.0 tps:1498.5 errors:0.0
+70: qps:0.0 tps:0.0  INTERNAL: qps:22386.8 tps:1243.8 errors:0.0
+80: qps:0.0 tps:0.0  INTERNAL: qps:26511.8 tps:1472.8 errors:0.0
+90: qps:0.0 tps:0.0  INTERNAL: qps:24351.8 tps:1352.8 errors:0.0
+100: qps:0.0 tps:0.0  INTERNAL: qps:21455.0 tps:1192.2 errors:0.0
+110: qps:0.0 tps:0.0  INTERNAL: qps:24135.8 tps:1340.8 errors:0.0
+120: qps:0.0 tps:0.0  INTERNAL: qps:32673.6 tps:1815.2 errors:0.0
+```
+
+
 
 
 
