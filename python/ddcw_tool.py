@@ -1967,3 +1967,70 @@ class mysql_install:
 		self.ssh.command(f'[ -f {self.cnf["mysqld"]["pid_file"]} ] && kill `cat {self.cnf["mysqld"]["pid_file"]}`')
 
 
+def mysql_error_log(filedata:str,tzadd=8)->dict:
+	"""
+	input: filename/error_log, tzadd:需要加的小时数
+	return: {'boot':data, 'error':data, 'warning':data, 'note':data, 'system':data}
+	"""
+	addhour = datetime.timedelta(hours=tzadd)
+	if len(filedata) <= 1000:
+		with open(filedata,'r') as f:
+			data = f.read()
+	else:
+		data = filedata
+	#rd = {}
+	detail = []
+	boot = []
+	error = []
+	warning = []
+	note = []
+	system = []
+	lastboot = None
+	lastshutdown = None
+	#rd['detail']:list  rd['boot'] rd['Error'] rd['Warning'] rd['Note']
+	# log_timestamps
+	# time:
+	#2020-08-07T15:02:00.832521Z            (UTC)
+	#2020-08-07T10:02:00.832521-05:00       (SYSTEM)
+	# 8.0 error-log format:   time thread [label] [err_code] [subsystem] msg
+	# 5.7 error-log format:   time thread [label] msg
+	for x in data.split('\n'):
+		if len(x.split(']')) > 2: #8.0
+			ec = x.split()[3]
+			sb = x.split()[4]
+		else:#5.7
+			ec = None
+			sb = None
+		try:
+			_ti = x.split()[0]
+			th = x.split()[1]
+			la = x.split()[2]
+			ms = x.split(']')[-1]
+			if len(_ti.split('Z')) > 1: #UTC时间转换
+				ti = datetime.datetime.strptime(_ti.split('.')[0],'%Y-%m-%dT%H:%M:%S') + addhour
+			else:
+				ti = datetime.datetime.strptime(_ti.split('.')[0],'%Y-%m-%dT%H:%M:%S')
+		except Exception as e:
+			#print(e)
+			continue
+		if la == '[Note]':
+			note.append([ti,th,la,ec,sb,ms])
+		elif la == '[Warning]':
+			warning.append([ti,th,la,ec,sb,ms])
+		elif la == '[ERROR]':
+			error.append([ti,th,la,ec,sb,ms])
+		elif la == '[System]':
+			system.append([ti,th,la,ec,sb,ms])
+		if len(ms.split('mysqld: ready for connections.')) > 1:
+			if lastboot is not None:
+				boot.append([lastboot,None])
+			lastboot = ti
+		elif len(ms.split('mysqld: Shutdown complete')) > 1:
+			if lastboot is not None:
+				boot.append([lastboot,ti])
+			else:
+				boot.append([None,ti])
+			lastboot = None
+	if lastboot is not None:
+		boot.append([lastboot,None])
+	return {'boot':boot,'error':error,'warning':warning,'note':note,'system':system}
