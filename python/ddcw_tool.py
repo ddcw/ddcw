@@ -2034,3 +2034,151 @@ def mysql_error_log(filedata:str,tzadd=8)->dict:
 	if lastboot is not None:
 		boot.append([lastboot,None])
 	return {'boot':boot,'error':error,'warning':warning,'note':note,'system':system}
+
+class ei_storage:
+	"""
+	starttime(4) days(4) index(8*seccond_of_days) data
+	"""
+	def __init__(self,basename='ddcweistore',days=1):
+		"""
+		arg1: baename
+		arg2: days 每个文件能存储的最大的天数
+		"""
+		self.basename = basename
+		self._days = days #每个文件存储的时间范围, 默认1天, 最大365 对于已经存在的文件不要修改,不然无法读.
+		self.flush_method = 1 #0: OS刷  1:每次write都刷, N:每N次刷
+		self.flushs = 0 #距离上次flush的次数
+		self.msg = ''
+		self.status = False
+		self.ts1 = 0
+		self.ts2 = 0
+		#self._header = 8
+
+	def flush(self,):
+		self._f1.flush()
+		os.fsync(self._f2)
+		
+
+	def _init(self,filename,stime=0)->bool:
+		stime = int(time.time()) if stime == 0 else stime
+		#不存在就创建,并初始化, 存在就校验,  校验失败或者创建失败就返回False
+		#同一个basename 不允许出现不同的 self._days
+		if os.path.exists(filename):
+			with open(filename,'rb') as f:
+				starttime = time.localtime(int.from_bytes(f.read(4),'big'))
+				days = int.from_bytes(f.read(4),'big')
+				if days == self._days and filename == f'{self.basename}_{starttime.tm_year}_{int(starttime.tm_yday/days)}.data':
+					self.msg = f'starttime:{starttime} days:{days}'
+					return True
+				else:
+					self.msg = f'{filename} has data, starttime:{starttime} days:{days}. maybe you should modify basename or days to {days}'
+					self.status = False
+					return False
+		else:
+			try:
+				with open(filename,'wb') as f:
+					header = int(stime).to_bytes(4,'big') + int(self._days).to_bytes(4,'big')
+					index = int(1).to_bytes(self._days*8*24*60*60,'big')
+					f.write(header)
+					f.write(index)
+					f.flush()
+			except Exception as e:
+				self.msg = e
+				self.status = False
+				return False
+		return True
+
+	def open(self,ts=0):
+		ts = int(time.time()) if ts == 0 else ts
+		date = time.localtime(ts)
+		if hasattr(self,'filename'):
+			if self.filename == f'{self.basename}_{date.tm_year}_{int(date.tm_yday/self._days)}.data':
+				self.status = False
+				self.msg = 'same filename'
+				return False
+			self.close()
+		self.filename = f'{self.basename}_{date.tm_year}_{int(date.tm_yday/self._days)}.data'
+
+		date2 = datetime.datetime.fromtimestamp(ts)
+		date3 = datetime.datetime(date.tm_year, date.tm_mon, date.tm_mday, ) - datetime.timedelta(days=(date.tm_yday%self._days)) #对self._days取整
+		#初始化header信息,再打开文件, 更新起止时间戳
+		if self._init(self.filename,ts):
+			self._f1 = open(self.filename,'ab') #更新数据
+			self.filesize = self._f1.tell()
+			self._f2 = os.open(self.filename,os.O_RDWR|os.O_CREAT, 0o644) #更新索引
+			self.ts1 = int(date3.timestamp()) #文件接收的最小时间戳
+			self.ts2 = int((date3 + datetime.timedelta(days=self._days)).timestamp()) #文件接收的最大时间戳 超过就重新open
+		else:
+			return False
+		return True
+	
+	def write(self,data,t=0):
+		t = int(time.time()) if t == 0 else t
+		if not self.ts1 <= t < self.ts2:
+			if not self.open(t):
+				return False
+		data_length = self._f1.write(data) #更新数据
+		index_offset = 8 + 8*(t - self.ts1)
+		index_data = self.filesize.to_bytes(4,'big') + data_length.to_bytes(4,'big')
+		os.lseek(self._f2,index_offset,0)
+		os.write(self._f2,index_data) #更新索引
+		self.filesize += data_length
+		self.flushs += 1
+		if self.flushs == self.flush_method:
+			self._f1.flush()
+			os.fsync(self._f2)
+			self.flushs = 0
+		return data_length,t
+
+	def read(self,ts:int,size=3600,): 
+		date = time.localtime(ts)
+		date3 = datetime.datetime(date.tm_year, date.tm_mon, date.tm_mday, ) - datetime.timedelta(days=(date.tm_yday%self._days))
+		offset = 8 + (ts - int(date3.timestamp()))*8
+		filename = f'{self.basename}_{date.tm_year}_{int(date.tm_yday/self._days)}.data'
+		try:
+			f1 = open(filename,'rb') #读索引
+			f2 = open(filename,'rb') #读数据
+			f1.seek(offset,0)
+			for x in range(size):
+				index_data = f1.read(8)
+				data_offset = int.from_bytes(index_data[0:4],'big')
+				data_size = int.from_bytes(index_data[4:8],'big')
+				f2.seek(data_offset)
+				yield f2.read(data_size)
+			f1.close()
+			f2.close()
+		except Exception as e:
+			self.msg = e
+			self.status = False
+
+
+			
+		
+	def read_once(self,ts:int,size=60,havanull=False): #havanull: False不要空数据  True要空数据占位置
+		data = []
+		date = time.localtime(ts)
+		date3 = datetime.datetime(date.tm_year, date.tm_mon, date.tm_mday, ) - datetime.timedelta(days=(date.tm_yday%self._days)) #对self._days取整
+		offset = 8 + (ts - int(date3.timestamp()))*8
+		filename = f'{self.basename}_{date.tm_year}_{int(date.tm_yday/self._days)}.data'
+		try:
+			with open(filename,'rb') as f:
+				f.seek(offset,0)
+				index_data = f.read(size*8)
+				data_offset = int.from_bytes(index_data[:4],'big')
+				f.seek(data_offset,0) #移动到起始位置, 准备读数据
+				for x in range(size):
+					datasize = int.from_bytes(index_data[x*8+4:x*8+8],'big')
+					if datasize > 0:
+						data.append(f.read(datasize))
+					elif havanull:
+						data.append(b'')
+				
+		except Exception as e:
+			self.status = False
+			self.msg = f'{e} {offset} {date3}'
+		return data
+	def close(self,):
+		self.flush()
+		self._f1.close()
+		os.close(self._f2)
+		self.lastfilename = self.filename

@@ -425,6 +425,32 @@ set_rundir
 
 
 
+## ei_storage
+
+存储数据的 ddcw-ei
+
+例子
+
+```python
+import ddcw_tool,time
+aa = ddcw_tool.ei_storage('/tmp/t20230226xxxxxx2',15)
+t1 = int(time.time())
+t2 = t1 + 1
+aa.open()
+aa.write(b'test t1',t1)
+aa.write(b'test t2',t2)
+time.sleep(5)
+aa.write(b'haha') #不给时间戳就使用当前时间, 返回(datasize,timestamp)
+aa.read_once(t1) #默认读取60条
+aa.read_once(t2,1) #可以指定N条
+for x in aa.read(t1,3): #读取t1时间点(含)之后的3条数据
+    print(x)
+```
+
+
+
+
+
 # FUNCTION
 
 ## read_yaml
