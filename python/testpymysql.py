@@ -31,6 +31,13 @@ def native_password(password,salt):
 		result[x] ^= stage1[x]
 	return result
 
+def _read_lenenc(bdata,i): 
+	length = btoint(bdata[i:i+1])
+	i += 1
+	data = bdata[i:i+length]
+	i += length
+	return data,i
+
 
 def btoint(bdata,t='little'):
         return int.from_bytes(bdata,t)
@@ -127,6 +134,69 @@ class mysql(object):
 			print('OK',)
 		else:
 			print('FAILED',auth_pack)
+		
+
+	def query(self,sql):
+		"""不考虑SQL超过16MB情况"""
+		# payload_length:3  sequence_id:1 payload:N
+		# payload: com_query(0x03):1 sql:n
+		bdata = struct.pack('<IB',len(sql)+1,0x03) #I:每个com_query的seq_id都从0开始,第4字节固定为0, 所以直接用I, +1:com_query占用1字节,  0x03:com_query
+		bdata += sql.encode()
+		self.sock.sendall(bdata)
+		self._next_seq_id = 1 #下一个包seq_id = 1
+
+	def result(self):
+		#https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query_response_text_resultset_column_definition.html
+		#Protocol::ColumnDefinition41
+		#字段数量
+		stat = self.read_pack()
+		filed_count = struct.unpack('<B',stat)[0] #不考虑0xFF(error) 0xFB(字段太多) 0x00(无返回数据,就是成功)
+
+		#字段描述(字段数据类型)
+		des_list = []
+		for x in range(filed_count):
+			i = 0
+			bdata = self.read_pack()
+			catalog,i = _read_lenenc(bdata,i)
+			schema,i = _read_lenenc(bdata,i)
+			table,i = _read_lenenc(bdata,i)
+			org_table,i = _read_lenenc(bdata,i)
+			name,i = _read_lenenc(bdata,i)
+			org_name,i = _read_lenenc(bdata,i)
+			i += 1 #0x0c
+			character_set = btoint(bdata[i:i+2])
+			i += 2
+			column_length = btoint(bdata[i:i+4])
+			i += 4
+			_type = btoint(bdata[i:i+1]) #只解析int和str, 之前解析binlog的时候还有date.... 算了
+			i += 1
+			flags = btoint(bdata[i:i+2])
+			i += 2
+			decimals = btoint(bdata[i:i+1])
+			i += 1
+			des_list.append([catalog,schema,table,org_table,name,org_name,character_set,column_length,_type,flags,decimals]) 
+			
+		self.des_list = des_list
+		bdata = self.read_pack() #EOF包
+		warnings = btoint(bdata[1:3])
+		row = []
+		while True:
+			bdata = self.read_pack()
+			if bdata[0:1] == b'\xfe': #EOF包
+				break
+			_row = []
+			i = 0
+			for x in des_list:
+				length = btoint(bdata[i:i+1]) #不考虑长字符
+				i += 1
+				_row.append(bdata[i:i+length]) #懒得做数据类型转换了
+			row.append(_row)
+		print(f'warnings:{warnings}  rows:{len(row)}')
+		return row
+		
+
+		#数据行数
+		#数据
 		
 		
 
