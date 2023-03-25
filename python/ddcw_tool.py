@@ -16,6 +16,8 @@ import logging
 import os
 import configparser
 from string import Template
+import binascii
+import struct
 
 
 class HostPortUP(object):
@@ -1121,7 +1123,7 @@ def parse_binlog(binlog)->list:
 	"""解析binlog. 这是要干嘛呢... 我忘了, 后面想起来了再实现吧.... -_-"""
 	pass
 
-def encrypt(k,salt=None)->bytes:
+def encrypt_base64(k,salt=None)->bytes:
 	'''
 	k: str, 需要加密的字符串
 	salt: 盐
@@ -1129,8 +1131,40 @@ def encrypt(k,salt=None)->bytes:
 	return base64.b64encode(k.encode('utf-8'))
 
 
-def decrypt(k,salt=None)->str:
+def decrypt_base64(k,salt=None)->str:
 	return base64.b64decode(k).decode('utf-8')
+
+def encrypt(password,salt=b'thisissalt'):
+	"""
+	先crc32 然后异或salt, 然后返回带crc32
+	"""
+	if not isinstance(password,bytes) and not isinstance(password,bytearray):
+		password = password.encode()
+	password = bytearray(password)
+	password += struct.pack('<L',binascii.crc32(password))
+	salt = bytearray(salt)
+	for x in range(len(password)):
+		password[x] ^= salt[x%len(salt)]
+	return password + struct.pack('<L',binascii.crc32(password))
+
+def decrypt(password,salt=b'thisissalt'):
+	if len(password) <= 8:
+		return b''
+	password = bytearray(password)
+	salt = bytearray(salt)
+	crc32 = password[-4:]
+	password = password[:-4]
+	if binascii.crc32(password) != struct.unpack('<L',crc32)[0]:
+		return b''
+	for x in range(len(password)):
+		password[x] ^= salt[x%len(salt)]
+	crc32 = password[-4:]
+	password = password[:-4]
+	if binascii.crc32(password) == struct.unpack('<L',crc32)[0]:
+		return password
+	else:
+		return b''
+
 
 def scanport(host='0.0.0.0',start=None,end=None,)->list:
 	"""
