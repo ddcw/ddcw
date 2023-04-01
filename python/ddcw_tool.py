@@ -18,6 +18,7 @@ import configparser
 from string import Template
 import binascii
 import struct
+import hashlib
 
 
 class HostPortUP(object):
@@ -1136,13 +1137,23 @@ def decrypt_base64(k,salt=None)->str:
 
 def encrypt(password,salt=b'thisissalt'):
 	"""
-	先crc32 然后异或salt, 然后返回带crc32
+	先crc32 然后异或随机数, 然后异或salt 然后返回带crc32
 	"""
 	if not isinstance(password,bytes) and not isinstance(password,bytearray):
 		password = password.encode()
-	password = bytearray(password)
+	if not isinstance(salt,bytes) and not isinstance(salt,bytearray):
+		salt = salt.encode()
 	password += struct.pack('<L',binascii.crc32(password))
+	rstr = hashlib.sha256(str(random.random()).encode()).digest()
+	rstr_size = random.randint(4,16)
+	rstr = bytearray(rstr[:rstr_size])
+	password = bytearray(password)
+	for x in range(len(password)):
+		password[x] ^= rstr[x%len(rstr)]
+	password = struct.pack('<B',rstr_size) + rstr + password
+
 	salt = bytearray(salt)
+	password = bytearray(password)
 	for x in range(len(password)):
 		password[x] ^= salt[x%len(salt)]
 	return password + struct.pack('<L',binascii.crc32(password))
@@ -1150,14 +1161,28 @@ def encrypt(password,salt=b'thisissalt'):
 def decrypt(password,salt=b'thisissalt'):
 	if len(password) <= 8:
 		return b''
+	if not isinstance(salt,bytes) and not isinstance(salt,bytearray):
+		salt = salt.encode()
 	password = bytearray(password)
 	salt = bytearray(salt)
 	crc32 = password[-4:]
 	password = password[:-4]
 	if binascii.crc32(password) != struct.unpack('<L',crc32)[0]:
 		return b''
+
+	salt = bytearray(salt)
+	password = bytearray(password)
 	for x in range(len(password)):
 		password[x] ^= salt[x%len(salt)]
+
+	rstr_size = struct.unpack('<B',password[:1])[0]
+	rstr = password[1:1+rstr_size]
+	password = password[1+rstr_size:]
+	rstr = bytearray(rstr)
+	password = bytearray(password)
+	for x in range(len(password)):
+		password[x] ^= rstr[x%len(rstr)]
+
 	crc32 = password[-4:]
 	password = password[:-4]
 	if binascii.crc32(password) == struct.unpack('<L',crc32)[0]:
