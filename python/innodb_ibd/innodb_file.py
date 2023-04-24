@@ -34,7 +34,7 @@ class fil_trailer(object):
 # size : 36 + 2 * FSEG_HEADER_SIZE = 56
 class page_header(object):
 	def __init__(self,bdata):
-		self.PAGE_N_DIR_SLOTS, self.PAGE_HEAP_TOP, self.PAGE_N_HEAP, self.PAGE_FREE, self.PAGE_GARBAGE, self.PAGE_LAST_INSERT, self.PAGE_DIRECTION, self.PAGE_N_DIRECTION, self.PAGE_N_RECS, self.PAGE_MAX_TRX_ID, self.PAGE_LEVEL, self.PAGE_INDEX_ID = struct.unpack('<9HQHQ',bdata[:36])
+		self.PAGE_N_DIR_SLOTS, self.PAGE_HEAP_TOP, self.PAGE_N_HEAP, self.PAGE_FREE, self.PAGE_GARBAGE, self.PAGE_LAST_INSERT, self.PAGE_DIRECTION, self.PAGE_N_DIRECTION, self.PAGE_N_RECS, self.PAGE_MAX_TRX_ID, self.PAGE_LEVEL, self.PAGE_INDEX_ID = struct.unpack('>9HQHQ',bdata[:36])
 		self.PAGE_BTR_SEG_LEAF = fseg_header(bdata[36:46])
 		self.PAGE_BTR_SEG_TOP = fseg_header(bdata[46:56])
 
@@ -168,15 +168,15 @@ def flst_base(bdata):
 	#4+6+6
 	#FIL_ADDR_SIZE = FIL_ADDR_PAGE(4) + FIL_ADDR_BYTE(2) #/** First in address is the page offset. */  Then comes 2-byte byte offset within page.*/
 	FLST_LEN = struct.unpack('>L',bdata[:4])[0]
-	FLST_FIRST = struct.unpack('<LH',bdata[4:10])
-	FLST_LAST = struct.unpack('<LH',bdata[10:16])
+	FLST_FIRST = struct.unpack('>LH',bdata[4:10])
+	FLST_LAST = struct.unpack('>LH',bdata[10:16])
 	return (FLST_LEN,FLST_FIRST,FLST_LAST)
 
 def flst(bdata):
 	#FLST_NODE storage/innobase/include/fut0lst.ic #/* We define the field offsets of a node for the list */
 	#FLST_PREV:6  FLST_NEXT:6
-	FLST_PREV = struct.unpack('<LH',bdata[0:6])
-	FLST_NEXT = struct.unpack('<LH',bdata[6:12])
+	FLST_PREV = struct.unpack('>LH',bdata[0:6])
+	FLST_NEXT = struct.unpack('>LH',bdata[6:12])
 	return(FLST_PREV,FLST_NEXT)
 
 def fseg_header(bdata):
