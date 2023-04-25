@@ -9,3 +9,11 @@ aa = innodb_index.rec_data_cluster(filename)
 for x in aa[:10]:
     print(x)
 ```
+
+# 提取DDL(推荐)
+```python
+import innodb_sdi
+aa = innodb_sdi.sdi('/data/mysql_3314/mysqldata/db1/ddcw_benchmark__12.ibd')
+print(aa.get_ddl())
+
+```
