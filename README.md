@@ -1,4 +1,4 @@
-旧版readme.md
+[旧版readme.md](https://github.com/ddcw/ddcw/blob/master/README_OLD.md)
 
 # 介绍
 
@@ -10,7 +10,7 @@
 
 
 
-# ibd2sql
+# [ibd2sql](https://github.com/ddcw/ibd2sql)
 
 解析mysql 8.0 的数据文件为sql语句. 用处不大...... 
 
@@ -18,23 +18,23 @@
 
 
 
-# inspection
+# [inspection](https://github.com/ddcw/inspection)
 
 mysql的巡检报告, 支持5.7/8.0,  支持shell采集数据.
 
-支持常用环境(主从,pxc,mgr), 能自动识别集群关系, 能够生成**html**或者**word**版巡检报告. [详情]([inspection](https://github.com/ddcw/inspection))
+支持常用环境(主从,pxc,mgr), 能自动识别集群关系, 能够生成**html**或者**word**版巡检报告. [详情](https://github.com/ddcw/inspection)
 
 
 
-# innodb_status
+# [innodb_status](https://github.com/ddcw/innodb_status)
 
 支持5.7/8.0查看`show engine innodb status` 信息. 基本上就是个翻译....
 
- `Total large memory allocated`为0, 不是本软件的锅, 是mysql8.0.27开始就是这样..... [详情]([innodb_status](https://github.com/ddcw/innodb_status))
+ `Total large memory allocated`为0, 不是本软件的锅, 是mysql8.0.27开始就是这样..... [详情](https://github.com/ddcw/innodb_status)
 
 
 
-# ddcw
+# [ddcw](https://github.com/ddcw/ddcw)
 
 这个比较杂, 基本上就是一些小点的工具, 有部分我都忘了是干啥的了. 
 
