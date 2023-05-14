@@ -1,110 +1,70 @@
+旧版readme.md
+
+# 介绍
+
+主要使用**python**/shell写一些关于**mysql**和linux的常用工具. 
+
+也会在[博客](https://cloud.tencent.com/developer/user/1130242)上分享相关例子.
+
+部分觉得不错的工具也会出相关的[视频](https://space.bilibili.com/448260423)演示
+
+
+
+# ibd2sql
+
+解析mysql 8.0 的数据文件为sql语句. 用处不大...... 
+
+离线解析ibd文件,支持生成DDL,支持查看被标记为delete的数据,仅支持常用数据类型. [详情](https://github.com/ddcw/ibd2sql)
+
+
+
+# inspection
+
+mysql的巡检报告, 支持5.7/8.0,  支持shell采集数据.
+
+支持常用环境(主从,pxc,mgr), 能自动识别集群关系, 能够生成**html**或者**word**版巡检报告. [详情]([inspection](https://github.com/ddcw/inspection))
+
+
+
+# innodb_status
+
+支持5.7/8.0查看`show engine innodb status` 信息. 基本上就是个翻译....
+
+ `Total large memory allocated`为0, 不是本软件的锅, 是mysql8.0.27开始就是这样..... [详情]([innodb_status](https://github.com/ddcw/innodb_status))
+
+
+
 # ddcw
-only for manage script at ./*shells
-and packet shells
 
-## conf
-for ddcw config, ddcw.conf define variable for other script , default.conf is default configure doc, change by release.  
-conf/ddcw.conf 定义了一些常规变量,为了方便其他脚本执行, conf/default.conf是默认的配置,只和版本有关.  
+这个比较杂, 基本上就是一些小点的工具, 有部分我都忘了是干啥的了. 
 
-## install_shells
-only install_script, such as ZK_PseudoCluster_install.sh to install Zookeeper,  
-install_shells目录下面的脚本都是安装类型的脚本,这里的脚本会按照conf/ddcw.conf里面定义的变量去执行  
-比如定义默认安装路径BASE_INSTALL_DIR="/usr/local"   开机自启ONBOOT=1  
-
-## man
-some of shell command has Help documentation   
-有些命令可以使用帮助文档,比如 man ddcw  
-
-## readme
-mayby shell script has readme  
-保留的,感觉没得用处....  
-
-## shells
-main shells will copy to /usr/bin and chmod +x shells/  
-这里的脚本会被拷贝到 /usr/bin下面去, 比如ddcw  scanportDDCW  
-
-
-# DETAILS
-- scanportDDCW:  
-扫描主机端口的,默认本机(0.0.0.0),默认所有端口,time参数表示间隔多少秒扫描一次  
-  ``` shell
-  scanportDDCW [ip IPV4_ADDR] [port PORT] [time TIME_INTERVAL]
-  scanportDDCW ip 127.0.0.1 port 1521 time 1 
-    ```
-
-- CheckCommDDCW:  
-校验当前用户拥有的命令的MD5,具体的用法我也忘了,可以看看:https://cloud.tencent.com/developer/article/1597040  
-  ``` shell
- 	CheckCommDDCW [PARAMETER]
-  ```
-  
-- CheckOracleENV_19c:  
-这个用法比较简单,和11g,12C一样的用法,直接执行就行,然后会给出建议脚本(/tmp/CheckOracleENV_19c/fixup_by_ddcw.sh),查看该脚本,没问题的话,就直接跑,多跑两边.  
-  ``` shell
-  CheckOracleENV_19c
-  [[ -f /tmp/CheckOracleENV_19c/fixup_by_ddcw.sh ]] && sh /tmp/CheckOracleENV_19c/fixup_by_ddcw.sh
-  ```
-  
-- sshNopasswd:  
-配置ssh免密登录的,也就是把自己的公钥拷贝到目标用户的.ssh/authorized_keys 文件  
-具体的用法我也忘了... https://cloud.tencent.com/developer/article/1612304  
-  ``` shell
-         sshNopasswd  [用户名@]主机名[:端口]  [密码]
-  ```
-
-- grepDDCW:  
-类似于grep,只不过会显示所有的内容,关键词有颜色,支持管道符和正则表达式  
-  ``` shell
-         sh grepDDCW.sh KEY_WORD|REGEX FILE_NAME [--color green|red|warn|blue]
-  ```
-
-- net_rates.sh  
-测试网速的脚本. 使用方法:sh net_rates.sh [网速限制(单位:字节)]  
-  ``` shell
-	#网速低于40 b/s 的就不显示.
-	sh net_rates.sh 40
-  ```
-
-  
-- ZK_PseudoCluster_install.sh:  
-安装zookeeper伪集群的,默认端口是218+node 比如2181 2182 2183 这样子的,目前版本不支持参数  
-  ``` shell
-        /usr/local/ddcw/install_shells/ZK_PseudoCluster_install.sh 
-  ```
-
-  
-- kafka_PseudoCluster.sh  
-安装kafka集群,要依赖于zookeeper的,可以先跑ZK_PseudoCluster_install.sh脚本,目前版本也不支持参数  
-  ``` shell
-        /usr/local/ddcw/install_shells/kafka_PseudoCluster.sh
-  ```
-
-  
-- oracle19c_install_2.2.sh  
-安装oracle19c单机的脚本,用法基本上和11g,12c的安装脚本一样,也得先跑CheckOracleENV_19c.sh设置环境的脚本  
-  ``` shell
-        /usr/local/ddcw/install_shells/oracle19c_install_2.2.sh [PARAMETERS]
-	部分参数如下(sh oracle19c_install_2.2.sh -h 就可以列出当前的脚本的默认配置):
-	sysPassword=
-	systemPassword=
-	pdbAdminPassword=
-	DB_NAME=
-	ORADATA=
-	INVENTORY_LOCATION_DIR=
-	pga_aggregate_target=
-	sga_target=
-	DBNAME=
-	characterSet=
-	rootpassword=
-  ```
-
-- tableCheckSum.sh  
-检查mysql源和目标表的行数的.
-  ``` shell
-        sh tableCheckSum.sh SRC_IP=192.168.1.2 SRC_USER=u1 SRC_PASSWORD=123456 SRC_PORT=3306 SRC_DBNAME=db1 DST_IP=192.168.1.3  DST_USER=u1 DST_PASSWORD=123456 DST_PORT=3306 DST_DBNAME=db2 PARALLEL=16 
-  ```
-- mysqlBinlogSYNC.sh  
-实时同步mysqlbinlog的脚本, 建议配合定时任务执行, 不支持传参, 参数直接修改脚本即可.
-  ``` shell
-        sh mysqlBinlogSYNC.sh
-  ```
+- [mysql/oracle导出导入数据命令生成(html/js)](https://github.com/ddcw/ddcw/blob/master/html/GetImportExportCommand.html)
+- [MYSQL安装脚本(shell)](https://github.com/ddcw/ddcw/blob/master/install_shells/MysqlInstallerByDDCW_ei_1.0.sh)
+- [MYSQL日志清理脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/MysqlClearLog.sh)
+- [OPENSSL安装脚本(shell)](https://github.com/ddcw/ddcw/blob/master/install_shells/OpensslInstall.sh)
+- [oracle 19C安装脚本(shell)](https://github.com/ddcw/ddcw/blob/master/install_shells/oracle19c_install_2.2.sh)
+- [oracle 19c环境检查设置脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/CheckOracleENV_19c.sh)
+- [zookeeper伪集群安装脚本(shell)](https://github.com/ddcw/ddcw/blob/master/install_shells/ZK_PseudoCluster_install.sh)
+- [kafka伪集群安装脚本(shell)](https://github.com/ddcw/ddcw/blob/master/install_shells/kafka_PseudoCluster.sh)
+- [mysql备份恢复脚本(shell)](https://github.com/ddcw/ddcw/tree/master/shells/BackupRestoreMysqlByDDCW)
+- [数据(O/M/P)校验脚本(python)](https://github.com/ddcw/ddcw/tree/master/shells/%E6%95%B0%E6%8D%AE%E6%A0%A1%E9%AA%8C)
+- [配置YUM源脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/autoconfig_YUM.sh)
+- [查看文件占用小于记录值的脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/dulsdiffddcw.sh)
+- [查看本地端口和进程的脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/getLocalPortProcess.sh)
+- [查看本地监听TCP和UDP的脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/getTCPorUDP.sh)
+- [高亮显示(shell)](https://github.com/ddcw/ddcw/blob/master/shells/grepDDCW.sh)
+- [设置linux登录提示信息(shell)](https://github.com/ddcw/ddcw/blob/master/shells/login.sh)
+- [binlog备份脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/mysqlBinlogSYNC.sh)
+- [查看linux网速脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/net_rates.sh)
+- [扫描端口脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/scanportDDCW.sh)
+- [配置ssh免密脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/sshNopasswd)
+- [mysql数据行数校验脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/tableCheckSum.sh)
+- [MYSQL ONLINE DDL脚本(python)](https://github.com/ddcw/ddcw/tree/master/python/mysql-onlineDDL)
+- [MYSQL测脚本(python)](https://github.com/ddcw/ddcw/tree/master/python/mysql%E5%8E%8B%E6%B5%8B)
+- [ORACLE压测脚本(python)](https://github.com/ddcw/ddcw/tree/master/python/oracle%E5%8E%8B%E6%B5%8B)
+- [数据同步(M->M/O)脚本(python)](https://github.com/ddcw/ddcw/tree/master/python/%E6%95%B0%E6%8D%AE%E5%90%8C%E6%AD%A5)
+- [mysql,linux常用工具ddcw_tool(python)](https://github.com/ddcw/ddcw/blob/master/python/ddcw_tool.py)
+- [自制类tar工具(python)](https://github.com/ddcw/ddcw/blob/master/python/ddcw_tar.py)
+- [sqlite3网络模块(python)](https://github.com/ddcw/ddcw/blob/master/python/sqlite3_net.py)
+- [MYSQL读写分离脚本(python)](https://github.com/ddcw/ddcw/blob/master/python/mysql_rw.py)
+- [MYSQL流量镜像(审计)脚本(python)](https://github.com/ddcw/ddcw/blob/master/python/mysql_monitor.py)
