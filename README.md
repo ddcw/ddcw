@@ -68,3 +68,4 @@ mysql的巡检报告, 支持5.7/8.0,  支持shell采集数据.
 - [sqlite3网络模块(python)](https://github.com/ddcw/ddcw/blob/master/python/sqlite3_net.py)
 - [MYSQL读写分离脚本(python)](https://github.com/ddcw/ddcw/blob/master/python/mysql_rw.py)
 - [MYSQL流量镜像(审计)脚本(python)](https://github.com/ddcw/ddcw/blob/master/python/mysql_monitor.py)
+- [解析binlog得到DDL(python)](https://github.com/ddcw/ddcw/blob/master/python/getddl_frombinlog.py)
