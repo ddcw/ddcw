@@ -1,0 +1,18 @@
+GLOBAL:
+  FILENAME: 'audit.log' #审计日志的名字
+  INTERFACE_NAME: 'ens32' #要监控的网卡名字
+  INTERFACE_PORT: 6446 #要监控的网卡的端口, 就是mysql的端口
+  USER_DICT : {}
+  #USER_DICT : {'192.168.101.1:54364':'root','192.168.101.1:54365':'root','localhost':'event_scheduler','192.168.101.1:54786':'u1','192.168.101.1:54787':'u1','ddcw21:50718':'root'} #旁挂审计无法识别已连接的账号信息, 只能识别新连接. 故可以初始化的时候就告诉审计插件相关信息. 参考SQL: select concat('{',group_concat("'",host,"':'",user,"'"),'}') from information_schema.processlist;
+
+CHILD:
+  - name: 'DBA '
+    users: ['root','dba1','db2','u2023']
+    record_begin: ['show','select','insert','delete','update','drop','truncate','alter','create','rename']
+
+  - name: 'YEWU'
+    users: ['u1','u2','u3']
+    record_begin: ['drop','truncate','alter','create','rename']
+
+
+
