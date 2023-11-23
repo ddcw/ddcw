@@ -1,0 +1,30 @@
+GLOBAL :
+  START : 4
+  STEP: 4
+  STOP: 1000
+  RUNTIME: 10 #second
+  REPORT_INTERVAL : 10
+  SQL_LOG_BIN : False #默认不写binlog
+  TRX : 'rw' #以某个事务开头
+  DB:
+    host: '192.168.101.21'
+    port: 3314
+    user: 'root'
+    password: '123456'
+    database: 'db1'
+    unix_socket: #可选
+
+
+TRX :
+  - name : 'rw'
+    var:
+      - ['v1','int',10,100]
+      - ['v2','zh',5,20]
+      - ['v3','datetime','2023-10-23 0:0:0','2023-11-23 0:0:0']
+      - ['v4','custom',[0x33,0x44],[10,20]]
+      - ['v5','range',1,2] #其实数字, step , 不需要stop
+    sql:
+      - statement : 'select * from db1.t20231120 where id > %s and id < %s'
+        value : ['v1','v5']
+
+    
