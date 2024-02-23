@@ -76,7 +76,7 @@ while [ 1 -eq 1 ];do
 			REST_TIME=""
 			RATEH=${RATE}
 		fi
-		jindutiao "$[ ${CURRENT_SIZE} * 100 / ${TOTAL_SIZE} ]" "Time Remaining: ${REST_TIME} Rate: ${RATEH}"
+		jindutiao "$[ ${CURRENT_SIZE} * 100 / ${TOTAL_SIZE} ]" " Time Remaining: ${REST_TIME} Rate: ${RATEH}"
 	elif [ ${CURRENT_SIZE} -ge ${TOTAL_SIZE} ];then
 		jindutiao "100"
 		break
