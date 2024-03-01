@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # write by ddcw @https://github.com/ddcw
-# 拆分 mysqldump 导出的.sql文件 (暂不支持过滤)
+# 拆分 mysqldump 导出的.sql文件 (仅支持库表级过滤)
 # 本脚本没有恢复 会话变量, 所以不建议使用 source
 
 import sys,os
@@ -104,6 +104,8 @@ def read_routine(f,header,db):
 			if data[:3] == "--\n":
 				#f.seek(old_offset,0)
 				break
+			elif data[:6] == "SET @@": #issue 2
+				break
 			fd.write(data)
 
 def read_event(f,header,db):
@@ -157,6 +159,8 @@ def read_table(f,header,db):
 				data = f.readline()
 				fd.write(data)
 				if data == "--\n": #可能有触发器, 所以不能以UNLOCK TABLES;结束
+					break
+				elif data[:3] == "-- ":
 					break
 		else:
 			f.seek(old_offset,0)
