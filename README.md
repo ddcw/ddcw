@@ -26,7 +26,7 @@ mysql的巡检报告, 支持5.7/8.0,  支持shell采集数据.
 
 
 
-# [pymysqlbinlog]([https://github.com/ddcw/innodb_status](https://github.com/ddcw/pymysqlbinlog))
+# [pymysqlbinlog](https://github.com/ddcw/pymysqlbinlog)
 
 离线解析/分析mysql binlog, 支持5.7/8.0 [详情](https://github.com/ddcw/pymysqlbinlog)
 
