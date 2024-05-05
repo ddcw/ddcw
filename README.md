@@ -26,11 +26,9 @@ mysql的巡检报告, 支持5.7/8.0,  支持shell采集数据.
 
 
 
-# [innodb_status](https://github.com/ddcw/innodb_status)
+# [pymysqlbinlog]([https://github.com/ddcw/innodb_status](https://github.com/ddcw/pymysqlbinlog))
 
-支持5.7/8.0查看`show engine innodb status` 信息. 基本上就是个翻译....
-
- `Total large memory allocated`为0, 不是本软件的锅, 是mysql8.0.27开始就是这样..... [详情](https://github.com/ddcw/innodb_status)
+离线解析/分析mysql binlog, 支持5.7/8.0 [详情](https://github.com/ddcw/pymysqlbinlog)
 
 
 
