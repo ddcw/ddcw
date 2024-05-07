@@ -686,7 +686,8 @@ long_query_time=${MYSQL_LONG_QUERY}
 general_log=${MYSQL_GENERAL_LOG}
 general_log_file=${MYSQL_GENERAL_LOG_FILE}
 
-expire_logs_days=${MYSQL_BINLOG_EXPIRE_LOGS_DAYS}
+loose_expire_logs_days=${MYSQL_BINLOG_EXPIRE_LOGS_DAYS}
+loose_binlog_expire_logs_seconds=$[ ${MYSQL_BINLOG_EXPIRE_LOGS_DAYS} * 3600 * 24 ]
 
 
 
@@ -746,11 +747,11 @@ binlog_gtid_simple_recovery=on
 
 
 #=======================主从====================#
-relay_log_info_file="relay-log.info"
-relay_log="${MYSQL_RELAY_LOG_FILE}"
+loose_relay_log_info_file="relay-log.info"
+loose_relay_log="${MYSQL_RELAY_LOG_FILE}"
 max_relay_log_size=104857600  #100M  默认0无限制
-relay_log_info_repository=${MYSQL_RELAY_LOG_INFO_REPOSITORY}
-master_info_repository="TABLE"
+loose_relay_log_info_repository=${MYSQL_RELAY_LOG_INFO_REPOSITORY}
+loose_master_info_repository="TABLE"
 relay_log_purge=on
 
 
