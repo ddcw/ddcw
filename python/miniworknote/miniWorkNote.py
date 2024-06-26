@@ -28,11 +28,11 @@
 # at 2024.06.26 finish
 
 # 变量名.
-BIND_HOST = '192.168.101.21'   # 监听的ip
+BIND_HOST = '0.0.0.0'   # 监听的ip
 BIND_PORT = 80                 # 监听的端口
 DB_FILE   = 'miniWorkNote.db'  # 保存数据的db文件, sqlite3
 SQL_FILE  = 'miniWorkNote.sql' # 保存数据的sql, 含DDL. like REDO
-SAVE_DAYS = 3650000            # 保存天数. (还没实现...)
+SAVE_DAYS = 3650000            # 保存天数. (还没实现...). 忘记实现了, 但无所谓
 
 # 表结构定义
 MINIWN_DDL = ["""
