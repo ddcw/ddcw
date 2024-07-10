@@ -12,9 +12,9 @@
 
 # [ibd2sql](https://github.com/ddcw/ibd2sql)
 
-解析mysql 8.0 的数据文件为sql语句. 用处不大...... 
+解析mysql 的数据文件为sql语句. 
 
-离线解析ibd文件,支持生成DDL,支持查看被标记为delete的数据,仅支持常用数据类型. [详情](https://github.com/ddcw/ibd2sql)
+离线解析ibd文件,支持生成DDL,支持查看被标记为delete的数据. [详情](https://github.com/ddcw/ibd2sql)
 
 
 
@@ -36,7 +36,15 @@ mysql的巡检报告, 支持5.7/8.0,  支持shell采集数据.
 
 这个比较杂, 基本上就是一些小点的工具, 有部分我都忘了是干啥的了. 
 
+2024.07.10 更新了一部分(无情的脚本工具人)
+
 - [mysql/oracle导出导入数据命令生成(html/js)](https://github.com/ddcw/ddcw/blob/master/html/GetImportExportCommand.html)
+- [mysql导出进度查看脚本(python)](https://github.com/ddcw/ddcw/blob/master/python/mysqldump_rate.py)
+- [mysql导入进度查看脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/MysqlImportRate.sh)
+- [mysql并发导入脚本(python+shell)](https://github.com/ddcw/ddcw/tree/master/python/MySQL并发导入)
+- [mysql自定义慢日志分析脚本(python)](https://github.com/ddcw/ddcw/blob/master/python/slowlog_analyze.py)
+- [miniWorkNote (python+html+css+js)](https://github.com/ddcw/ddcw/tree/master/python/miniworknote)
+- [mysql_config_editor 的shell版(shell)](https://github.com/ddcw/ddcw/tree/master/shells/mysql_config_editor)
 - [MYSQL安装脚本(shell)](https://github.com/ddcw/ddcw/blob/master/install_shells/MysqlInstallerByDDCW_ei_1.0.sh)
 - [MYSQL日志清理脚本(shell)](https://github.com/ddcw/ddcw/blob/master/shells/MysqlClearLog.sh)
 - [OPENSSL安装脚本(shell)](https://github.com/ddcw/ddcw/blob/master/install_shells/OpensslInstall.sh)
