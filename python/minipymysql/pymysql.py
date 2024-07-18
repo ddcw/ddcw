@@ -126,6 +126,7 @@ class cursor(object):
 	def execute(self,sql,parameters=None):
 		# 不支持%这种传参. 太麻烦了. 不符合本脚本的初衷(所以初衷是啥呢?)
 		self._result = []
+		self.description = []
 		self.conn._query(sql)
 		stat = self.conn._read_pack() # column count
 		# 暂不考虑太多行的情况(<=251使用1字节)
@@ -141,7 +142,6 @@ class cursor(object):
 		else:
 			column_count = -1 # 不支持,谁TM没事建那么多列???
 		self.column_count = column_count
-		self.description = []
 		for x in range(column_count):
 			bdata = self.conn._read_pack()
 			col = {}
@@ -196,7 +196,10 @@ class cursor(object):
 					i2 = i21<<16+i22
 				elif i1 == 0xFE:
 					i2 = struct.unpack('<Q',bdata[i:i+8])[0]
-				_data.append(bdata[i:i+i2].decode())
+				try:
+					_data.append(bdata[i:i+i2].decode())
+				except:
+					_data.append(bdata[i:i+i2])
 				i += i2
 			self._result.append(_data)
 			
@@ -350,7 +353,9 @@ class connect(object):
 			self.pubk = pubk
 			password = sha2_rsa_encrypt(self.password.encode(), self.salt, pubk)
 			self._write_pack(password)
-			authpack = self.read_pack() #看看是否成功
+			authpack = self._read_pack() #看看是否成功
+			if authpack[:1] == b'\xff':
+				raise Exception({'code':struct.unpack('<H',authpack[1:3])[0],'msg':authpack[3:].decode()})
 		else:
 			return False
 
