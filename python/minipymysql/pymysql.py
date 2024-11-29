@@ -376,8 +376,8 @@ class connect(object):
 		return cursor(self)
 
 	def _query(self,sql):
-		bdata = struct.pack('<IB',len(sql)+1,0x03)
-		bdata += sql.encode()
+		sql = sql.encode()
+		bdata = struct.pack('<IB',len(sql)+1,0x03) + sql
 		self.conn.sendall(bdata)
 		self._next_seq_id = 1
 		#return self._result()
