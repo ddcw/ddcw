@@ -1,67 +1,129 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#解析指定binlog文件生成ddl. 仅支持binlog > 4.0
-#也可以使用mysqlbinlog解析(但是不完整...): mysqlbinlog /data/mysql_3308/mysqllog/binlog/m3308.0* | grep -i -E '^(CREATE |DROP |ALTER |RENAME |TRUNCATE |USE )'
+# write by ddcw @https://github.com/ddcw
+# 提取mysqlbinlog中的DDL的脚本. 之前那个版本太丑了, 不好看, 于是写一版新的, 用法和之前一样.
 
+import sys
+import os
 import struct
-import os,sys,glob
-import datetime
-
-QUERY_EVENT = 2 #ddl只有这一个event
-
-def print_help():
-	print('version: 0.1')
-	print('example:')
-	print(f'\t{sys.argv[0]} mysql-bin.0000022 [CHECK:BOOL]')
-	print(f'\t{sys.argv[0]} mysql-bin.000002* [CHECK:BOOL]')
-	print('')
+ARGV = sys.argv
+# 用法:
+def USAGE():
+	msg = "\nUSAGE:\n\t python " + str(ARGV[0]) + " /PATH/mysql-bin.000002*\n\n"
+	sys.stdout.write(msg)
 	sys.exit(1)
 
-if len(sys.argv) < 2 or sys.argv[1] in ['-h','--help','-help','-v','-V','--version','-version']:
-	print_help()
-
-files = glob.glob(sys.argv[1])
-if len(files) == 0:
-	print(f'{sys.argv[1]} not exists or have file')
-
-
-checksum = True if len(sys.argv) > 2 else False 
-
-
-def event_header(bdata):
-	timestamp, event_type, server_id, event_size, log_pos, flags = struct.unpack("<LBLLLh",bdata[0:19])
-	return {"timestamp":timestamp,'event_type':event_type,'server_id':server_id,'event_size':event_size,'log_pos':log_pos,'flags':flags,}
-
-def parserfile(filename):
+def GET_DDL_FROM_BINLOG(filename):
 	with open(filename,'rb') as f:
 		magic = f.read(4)
+		msg = "\n\n-- 开始解析BINLOG: " + str(filename) + "\n"
 		if magic != b'\xfebin': #relay log
 			f.seek(0,0)
+			msg = "-- 开始解析relay log: " + str(filename) + "\n"
+		sys.stdout.write(msg)
+		CHECKSUM = False
 		while True:
-			bheader = f.read(19)
-			if bheader == b'':
+			event_header_bdata = f.read(19)
+			if event_header_bdata == b'':
 				break
-			header = event_header(bheader)
-			event_bdata = f.read(header['event_size']-19)
-			if header['event_type'] == QUERY_EVENT:
-				#print(event_bdata)
-				slave_proxy_id, execution_time, schema_len, error_code, status_var_len = struct.unpack('<LLBHH',event_bdata[:13])
-				#offset = 4+4+1+2+2 + status_var_len
-				offset = 13 + status_var_len 
-				schema = event_bdata[offset:offset+schema_len].decode()
-				offset += schema_len + 1 #\x00
-				if checksum:
-					ddl = event_bdata[offset:-4].decode()
+			timestamp, event_type, server_id, event_size, log_pos, flags = struct.unpack("<LBLLLh",event_header_bdata[0:19])
+			event_bdata = f.read(event_size-19)
+			if event_type == 15: # FORMAT_DESCRIPTION_EVENT
+				aa = FORMAT_DESC_EVENT(event_bdata)
+				CHECKSUM = aa.init()
+			elif event_type == 2: # QUERY_EVENT
+				if CHECKSUM:
+					qe = QUERY_EVENT(event_bdata[:-4])
 				else:
-					ddl = event_bdata[offset:].decode()
-				#print(schema,ddl)
-				if ddl != 'BEGIN' and schema != '':
-					print(f"#START:{f.tell()-header['event_size']}  SIZE:{header['event_size']} TIME:{datetime.datetime.fromtimestamp(header['timestamp'])}")
-					print(f'USE {schema};')
-					print(f'{ddl};')
-					print('')
-				
-				
-for binlogname in files:
-	parserfile(binlogname)
+					qe = QUERY_EVENT(event_bdata)
+				qe.init()
+				if qe.query == "BEGIN": # continue就没必要打印了
+					continue
+				msg = "\nuse `" + str(qe.dbname) + "`\n" + str(qe.query) + ";\n"
+				sys.stdout.write(msg)
+			elif event_type == 3: # STOP_EVENT
+				break
+			
 
 
+class EVENT(object):
+	def __init__(self,bdata):
+		self.offset = 0
+		self.bdata = bdata
+		self.size = len(bdata)
+	def read(self,n):
+		if self.offset + n > self.size:
+			return None
+		data = self.bdata[self.offset:self.offset+n]
+		self.offset += n
+		return data
+	def read_uint(self,n): # 全是little
+		data = self.read(n)
+		if data is None:
+			return data
+		#tdata = [ x for x in data ] # only py3
+		sn = ">"+str(n)+"B"
+		tdata = struct.unpack(sn,data)
+		rdata = 0
+		for x in range(n):
+			rdata += tdata[x]<<((x)*8)
+		return rdata
+
+class FORMAT_DESC_EVENT(EVENT):
+	def __init__(self,bdata):
+		super(FORMAT_DESC_EVENT,self).__init__(bdata)
+	def init(self,):
+		self.binlog_version = self.read_uint(2)
+		self.mysql_version = self.read(50).decode()
+		self.create_timestamp = self.read_uint(4)
+		self.event_header_length = self.read_uint(1)
+		if self.mysql_version[:1] == "5":
+			self.event_post_header_len = self.read(38)
+		elif self.mysql_version[:4] == "8.4.":
+			self.event_post_header_len = self.read(43) # FOR MYSQL 8.4
+		elif self.mysql_version[:1] == "8":
+			self.event_post_header_len = self.read(41)
+		self.checksum_alg = self.read_uint(1)
+		msg = "-- MYSQL_VERSION:" + str(self.mysql_version) + " BINLOG_VERSION:" + str(self.binlog_version) + " CHECKSUM:" + str(self.checksum_alg)  + "\n"
+		sys.stdout.write(msg)
+		if self.checksum_alg:
+			return True
+
+class QUERY_EVENT(EVENT):
+	def __init__(self,bdata):
+		super(QUERY_EVENT,self).__init__(bdata)
+	def init(self,):
+		self.thread_id = self.read_uint(4)
+		self.query_exec_time = self.read_uint(4)
+		db_len = self.read_uint(1)
+		self.error_code = self.read_uint(2)
+		status_vars_len = self.read_uint(2)
+		self.status_vars = self.read(status_vars_len)
+		self.dbname = self.read(db_len).decode()
+		self.read(1)
+		self.query = self.read(len(self.bdata)-self.offset).decode()
+
+if __name__ == "__main__":
+	if len(ARGV) < 2:
+		USAGE()
+	for x in ARGV[1:]:
+		if str(x).upper().find('-H') >= 0:
+			USAGE()
+	READED_FILENAME = []
+	for filename in ARGV[1:]:
+		CONTINUE_FLAG = False
+		msg = ''
+		if filename in READED_FILENAME:
+			msg += "\n文件(" + filename + ")已经解析过了\n"
+			CONTINUE_FLAG = True
+		READED_FILENAME.append(filename)
+		if not os.path.exists(filename):
+			msg += "文件(" + filename + ")不存在\n"
+			CONTINUE_FLAG = True
+		if CONTINUE_FLAG:
+			sys.stdout.write(msg)
+			continue
+		else:
+			GET_DDL_FROM_BINLOG(filename)
+	if len(READED_FILENAME) == 0:
+		USAGE()
