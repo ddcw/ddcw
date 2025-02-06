@@ -3,5 +3,5 @@
 
 # 使用方法
 ```python
-python3 fonline_modify_mysql_password.py --user root@localhost --password newpassword
+python3 online_modify_mysql_password.py --user root@localhost --password newpassword
 ```
