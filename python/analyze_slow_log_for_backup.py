@@ -71,10 +71,10 @@ class READ_SLOW_LOG(object):
 		self.will_decode = will_decode
 	def _read_one_line(self):
 		data = self.fd.readline()
-		if data == b'':
+		if data == b'' or data == '':
 			return False,''
 		else:
-			return True,data.decode()
+			return (True,data.decode()) if self.will_decode else (True,data)
 	def __close__(self):
 		self.fd.close()
 	def read(self,): # generator
